@@ -1,0 +1,44 @@
+{
+    "M": {
+        "X": {
+            "0": {
+                "Z": {
+                    "0": null,
+                    "1": null
+                }
+            },
+            "1": null
+        },
+        "Y": {
+            "0": {
+                "Z": {
+                    "0": null,
+                    "1": null
+                }
+            },
+            "1": null
+        }
+    },
+    "O": {
+        "X": [ "0", "1" ],
+        "Y": [ "0", "1" ],
+        "Z": [ "0", "1" ]
+    },
+    "e": {
+        "X": null,
+        "Y": null,
+        "Z": [
+            { "X": "0" },
+            { "Y": "0" }
+        ]
+    },
+    "C": [ [ "X", "Z" ], [ "Y", "Z" ] ],
+    "notes": {
+        "A": "Example 7.2 Abramsky 2024",
+        "B": "Everything represented as objects essentially.",
+        "measurements": "{X, Y, Z}",
+        "outcomes": "{0, 1} for all measurements",
+        "enabling relations": "{(x,0)} ⊢ Z, {(y,0)} ⊢ Z",
+        "context covers": "{{X, Z}, {Y, Z}}"
+    }
+}

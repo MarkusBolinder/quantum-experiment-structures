@@ -1,0 +1,81 @@
+{
+    "measurements": {
+        "type": "set",
+        "a": {
+            "type": "measurement",
+            "enabled_by": [],
+            "0": {
+                "type": "outcome",
+                "leaf": true
+            },
+            "1": {
+                "type": "outcome",
+                "leaf": true
+            },
+            "member_of": [ [ "a", "b" ], [ "a", "b'" ] ]
+        },
+        "b": {
+            "type": "measurement",
+            "enabled_by": [],
+            "0": {
+                "type": "outcome",
+                "leaf": true
+            },
+            "1": {
+                "type": "outcome",
+                "leaf": true
+            },
+            "member_of": [ [ "a", "b" ], [ "a'", "b" ] ]
+        },
+        "a'": {
+            "type": "measurement",
+            "enabled_by": [],
+            "0": {
+                "type": "outcome",
+                "leaf": true
+            },
+            "1": {
+                "type": "outcome",
+                "leaf": true
+            },
+            "member_of": [ [ "a'", "b" ], [ "a'", "b'" ] ]
+        },
+        "b'": {
+            "type": "measurement",
+            "enabled_by": [],
+            "0": {
+                "type": "outcome",
+                "leaf": true
+            },
+            "1": {
+                "type": "outcome",
+                "leaf": true
+            },
+            "member_of": [ [ "a", "b'" ], [ "a'", "b'" ] ]
+        }
+    },
+    "outcomes": {
+        "type": "set",
+        "a": ["0", "1"],
+        "a'": ["0", "1"],
+        "b": ["0", "1"],
+        "b'": ["0", "1"]
+    },
+    "enabling_relations": {
+        "type": "set",
+        "a": [],
+        "a'": [],
+        "b": [],
+        "b'": []
+    },
+    "C": [ [ "a", "b" ], [ "a", "b'" ], [ "a'", "b" ], [ "a'", "b'" ] ],
+    "notes": {
+        "A": "Bipartite Bell-type scenario.",
+        "B": "Should probabilities be present too?",
+        "C": "Can turn it into e.g. PR-box by adding probabilities/possibilities.",
+        "measurements": "{a, a', b, b'}",
+        "outcomes": "{0, 1} for all measurements",
+        "enabling relations": "∅ ⊢ X, ∅ ⊢ Y, ∅ ⊢ Z, ∅ ⊢ W",
+        "context covers": "{{a, b}, {a', b}, {a, b'}, {a', b'}}"
+    }
+}

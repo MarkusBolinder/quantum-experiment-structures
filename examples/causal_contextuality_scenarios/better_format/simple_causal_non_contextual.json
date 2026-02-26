@@ -1,0 +1,64 @@
+{
+    "measurements": {
+        "type": "set",
+        "X": {
+            "type": "measurement",
+            "enabled_by": [],
+            "0": {
+                "type": "outcome",
+                "leaf": true
+            },
+            "1": {
+                "type": "outcome",
+                "leaf": true
+            },
+            "member_of": [ [ "X" ] ]
+        },
+        "Y": {
+            "type": "measurement",
+            "enabled_by": [ { "X": "0" } ],
+            "0": {
+                "type": "outcome",
+                "leaf": true
+            },
+            "1": {
+                "type": "outcome",
+                "leaf": true
+            },
+            "member_of": [ [ "Y" ] ]
+        },
+        "Z": {
+            "type": "measurement",
+            "enabled_by": [ { "Y": "0" } ],
+            "0": {
+                "type": "outcome",
+                "leaf": true
+            },
+            "1": {
+                "type": "outcome",
+                "leaf": true
+            },
+            "member_of": [ [ "Z" ] ]
+        }
+    },
+    "outcomes": {
+        "type": "set",
+        "X": ["0", "1"],
+        "Y": ["0", "1"],
+        "Z": ["0", "1"]
+    },
+    "enabling_relations": {
+        "type": "set",
+        "X": [],
+        "Y": [ { "X": "0" } ],
+        "Z": [ { "Y": "0" } ]
+    },
+    "C": [ [ "X" ], [ "Y" ], [ "Z" ] ],
+    "notes": {
+        "A": "Simple, causal, contextual scenario.",
+        "measurements": "{X, Y, Z}",
+        "outcomes": "{0, 1} for all measurements",
+        "enabling relations": "∅ ⊢ X, {(x,0)} ⊢ Y, {(y,0)} ⊢ Z",
+        "context covers": "{{X}, {Y}, {Z}}"
+    }
+}

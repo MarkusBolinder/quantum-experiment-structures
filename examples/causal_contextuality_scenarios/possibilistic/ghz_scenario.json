@@ -1,0 +1,377 @@
+{
+    "measurements": {
+        "type": "set",
+        "A_X": {
+            "type": "measurement",
+            "enabled_by": [],
+            "outcomes": [
+                {
+                    "type": "outcome",
+                    "value": -1,
+                    "leaf": true,
+                    "possible_with": [
+                        {
+                            "B_X": 0,
+                            "C_X": 1
+                        },
+                        {
+                            "B_X": 1,
+                            "C_X": 0
+                        },
+                        {
+                            "B_Y": 0,
+                            "C_Y": 0
+                        },
+                        {
+                            "B_Y": 1,
+                            "C_Y": 1
+                        }
+                    ]
+                },
+                {
+                    "type": "outcome",
+                    "value": 1,
+                    "leaf": true,
+                    "possible_with": [
+                        {
+                            "B_X": 0,
+                            "C_X": 0
+                        },
+                        {
+                            "B_X": 1,
+                            "C_X": 1
+                        },
+                        {
+                            "B_Y": 0,
+                            "C_Y": 1
+                        },
+                        {
+                            "B_Y": 1,
+                            "C_Y": 0
+                        }
+                    ]
+                }
+            ],
+            "member_of": [
+                [ "A_X", "B_X", "C_X" ],
+                [ "A_X", "B_Y", "C_Y" ]
+            ]
+        },
+        "A_Y": {
+            "type": "measurement",
+            "enabled_by": [],
+            "outcomes": [
+                {
+                    "type": "outcome",
+                    "value": -1,
+                    "leaf": true,
+                    "possible_with": [
+                        {
+                            "B_X": 0,
+                            "C_Y": 0
+                        },
+                        {
+                            "B_X": 1,
+                            "C_Y": 1
+                        },
+                        {
+                            "B_Y": 0,
+                            "C_X": 0
+                        },
+                        {
+                            "B_Y": 1,
+                            "C_X": 1
+                        }
+                    ]
+                },
+                {
+                    "type": "outcome",
+                    "value": 1,
+                    "leaf": true,
+                    "possible_with": [
+                        {
+                            "B_X": 0,
+                            "C_Y": 1
+                        },
+                        {
+                            "B_X": 1,
+                            "C_Y": 0
+                        },
+                        {
+                            "B_Y": 0,
+                            "C_X": 1
+                        },
+                        {
+                            "B_Y": 1,
+                            "C_X": 0
+                        }
+                    ]
+                }
+            ],
+            "member_of": [
+                [ "A_Y", "B_X", "C_Y" ],
+                [ "A_Y", "B_Y", "C_X" ]
+            ]
+        },
+        "B_X": {
+            "type": "measurement",
+            "enabled_by": [],
+            "outcomes": [
+                {
+                    "type": "outcome",
+                    "value": -1,
+                    "leaf": true,
+                    "possible_with": [
+                        {
+                            "A_X": 0,
+                            "C_X": 1
+                        },
+                        {
+                            "A_X": 1,
+                            "C_X": 0
+                        },
+                        {
+                            "A_Y": 0,
+                            "C_Y": 0
+                        },
+                        {
+                            "A_Y": 1,
+                            "C_Y": 1
+                        }
+                    ]
+                },
+                {
+                    "type": "outcome",
+                    "value": 1,
+                    "leaf": true,
+                    "possible_with": [
+                        {
+                            "A_X": 0,
+                            "C_X": 0
+                        },
+                        {
+                            "A_X": 1,
+                            "C_X": 1
+                        },
+                        {
+                            "A_Y": 0,
+                            "C_Y": 1
+                        },
+                        {
+                            "A_Y": 1,
+                            "C_Y": 0
+                        }
+                    ]
+                }
+            ],
+            "member_of": [
+                [ "A_X", "B_X", "C_X" ],
+                [ "A_Y", "B_X", "C_Y" ]
+            ]
+        },
+        "B_Y": {
+            "type": "measurement",
+            "enabled_by": [],
+            "outcomes": [
+                {
+                    "type": "outcome",
+                    "value": -1,
+                    "leaf": true,
+                    "possible_with": [
+                        {
+                            "A_X": 0,
+                            "C_Y": 0
+                        },
+                        {
+                            "A_X": 1,
+                            "C_Y": 1
+                        },
+                        {
+                            "A_Y": 0,
+                            "C_X": 0
+                        },
+                        {
+                            "A_Y": 1,
+                            "C_X": 1
+                        }
+                    ]
+                },
+                {
+                    "type": "outcome",
+                    "value": 1,
+                    "leaf": true,
+                    "possible_with": [
+                        {
+                            "A_X": 0,
+                            "C_Y": 1
+                        },
+                        {
+                            "A_X": 1,
+                            "C_Y": 0
+                        },
+                        {
+                            "A_Y": 0,
+                            "C_X": 1
+                        },
+                        {
+                            "A_Y": 1,
+                            "C_X": 0
+                        }
+                    ]
+                }
+            ],
+            "member_of": [
+                [ "A_X", "B_Y", "C_Y" ],
+                [ "A_Y", "B_Y", "C_X" ]
+            ]
+        },
+        "C_X": {
+            "type": "measurement",
+            "enabled_by": [],
+            "outcomes": [
+                {
+                    "type": "outcome",
+                    "value": -1,
+                    "leaf": true,
+                    "possible_with": [
+                        {
+                            "A_X": 0,
+                            "B_X": 1
+                        },
+                        {
+                            "A_X": 1,
+                            "B_X": 0
+                        },
+                        {
+                            "A_Y": 0,
+                            "B_Y": 0
+                        },
+                        {
+                            "A_Y": 1,
+                            "B_Y": 1
+                        }
+                    ]
+                },
+                {
+                    "type": "outcome",
+                    "value": 1,
+                    "leaf": true,
+                    "possible_with": [
+                        {
+                            "A_X": 0,
+                            "B_X": 0
+                        },
+                        {
+                            "A_X": 1,
+                            "B_X": 1
+                        },
+                        {
+                            "A_Y": 0,
+                            "B_Y": 1
+                        },
+                        {
+                            "A_Y": 1,
+                            "B_Y": 0
+                        }
+                    ]
+                }
+            ],
+            "member_of": [
+                [ "A_X", "B_X", "C_X" ],
+                [ "A_Y", "B_Y", "C_X" ]
+            ]
+        },
+        "C_Y": {
+            "type": "measurement",
+            "enabled_by": [],
+            "outcomes": [
+                {
+                    "type": "outcome",
+                    "value": -1,
+                    "leaf": true,
+                    "possible_with": [
+                        {
+                            "A_X": 0,
+                            "B_Y": 0
+                        },
+                        {
+                            "A_X": 1,
+                            "B_Y": 1
+                        },
+                        {
+                            "A_Y": 0,
+                            "B_X": 0
+                        },
+                        {
+                            "A_Y": 1,
+                            "B_X": 1
+                        }
+                    ]
+                },
+                {
+                    "type": "outcome",
+                    "value": 1,
+                    "leaf": true,
+                    "possible_with": [
+                        {
+                            "A_X": 0,
+                            "B_Y": 1
+                        },
+                        {
+                            "A_X": 1,
+                            "B_Y": 0
+                        },
+                        {
+                            "A_Y": 0,
+                            "B_X": 1
+                        },
+                        {
+                            "A_Y": 1,
+                            "B_X": 0
+                        }
+                    ]
+                }
+            ],
+            "member_of": [
+                [ "A_X", "B_Y", "C_Y" ],
+                [ "A_Y", "B_X", "C_Y" ]
+            ]
+        }
+    },
+    "outcomes": {
+        "type": "set",
+        "A_X": [0, 1],
+        "A_Y": [0, 1],
+        "B_X": [0, 1],
+        "B_Y": [0, 1],
+        "C_X": [0, 1],
+        "C_Y": [0, 1]
+    },
+    "enabling_relations": {
+        "type": "set",
+        "A_X": [],
+        "A_Y": [],
+        "B_X": [],
+        "B_Y": [],
+        "C_X": [],
+        "C_Y": []
+    },
+    "contextuality_covers": [
+        [ "A_X", "B_X", "C_X" ],
+        [ "A_X", "B_Y", "C_Y" ],
+        [ "A_Y", "B_X", "C_Y" ],
+        [ "A_Y", "B_Y", "C_X" ]
+    ],
+    "notes": {
+        "A": "GHZ scenario, more complex.",
+        "B": "Measurements are labeled PARTY_SETTING (A_X means party A measures X).",
+        "C": "Added value field to outcomes as the GHZ denotes outcomes as +/- 1.",
+        "D": "Should the possible_with field be inside the covers? Since they restrict what is possible to measure.",
+        "E": "I suppose the cover can be inferred given the events present in the objects.",
+        "F": "I opted to place the index of the outcomes in the possible_with descriptors.",
+        "measurements": "{X, Y, Z}",
+        "outcomes": "{0, 1} for all measurements",
+        "enabling relations": "∅ ⊢ X, ∅ ⊢ Y, {(x,0)} ⊢ Z, {(y,0)} ⊢Z",
+        "context covers": "{{X, Y}, {Y, Z}}"
+    }
+}

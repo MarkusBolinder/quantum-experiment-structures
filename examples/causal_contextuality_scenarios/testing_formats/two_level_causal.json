@@ -1,0 +1,48 @@
+{
+    "M": {
+        "X": [
+            {
+                "Y": [
+                    { "Z": [ null, null ] },
+                    null
+                ]
+            },
+            null
+        ],
+        "Y": [
+            {
+                "X": [
+                    { "Z": [ null, null ] },
+                    null
+                ]
+            },
+            null
+        ]
+    },
+    "O": {
+        "X": [0, 1],
+        "Y": [0, 1],
+        "Z": [0, 1]
+    },
+    "e": {
+        "X": null,
+        "Y": null,
+        "Z": [
+            {
+                "X": 0,
+                "Y": 0
+            }
+        ]
+    },
+    "C": [ [ "X", "Z" ], [ "Y", "Z" ] ],
+    "notes": {
+        "A": "Example 7.3 Abramsky 2024",
+        "B": "Outcomes are represented by indices in arrays.",
+        "C": "Redundancy in measurements, as Z requires two events to enable.",
+        "D": "Does not make sense with nested Y in X as they cannot both be measured (not in the same cover).",
+        "measurements": "{X, Y, Z}",
+        "outcomes": "{0, 1} for all measurements",
+        "enabling relations": "{(x,0),(y,0)} ⊢ Z",
+        "context covers": "{{X, Z}, {Y, Z}}"
+    }
+}

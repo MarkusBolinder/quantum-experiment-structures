@@ -1,0 +1,149 @@
+{
+    "measurements": [
+        {
+            "measurement": "A",
+            "enabled_by": [],
+            "outcomes": [
+                {
+                    "value": 0,
+                    "leaf": false
+                },
+                {
+                    "value": 1,
+                    "leaf": false
+                }
+            ],
+            "member_of": [ [ "A", "B" ], [ "A", "C" ] ]
+        },
+        {
+            "measurement": "B",
+            "enabled_by": [],
+            "outcomes": [
+                {
+                    "value": 0,
+                    "leaf": false
+                },
+                {
+                    "value": 1,
+                    "leaf": false
+                }
+            ],
+            "member_of": [ [ "A", "B" ], [ "B", "C" ] ]
+        },
+        {
+            "measurement": "C",
+            "enabled_by": [
+                { "m": [ "A" ], "v": [ 0 ] },
+                { "m": [ "B" ], "v": [ 0 ] }
+            ],
+            "outcomes": [
+                {
+                    "value": 0,
+                    "leaf": false
+                },
+                {
+                    "value": 1,
+                    "leaf": true
+                }
+            ],
+            "member_of": [ [ "A", "C" ], [ "B", "C" ], [ "C", "F" ] ]
+        },
+        {
+            "measurement": "D",
+            "enabled_by": [ { "m": [ "A" ], "v": [ 1 ] } ],
+            "outcomes": [
+                {
+                    "value": 0,
+                    "leaf": true
+                },
+                {
+                    "value": 1,
+                    "leaf": false
+                }
+            ],
+            "member_of": [ [ "D", "F" ] ]
+        },
+        {
+            "measurement": "E",
+            "enabled_by": [ { "m": [ "B" ], "v": [ 1 ] } ],
+            "outcomes": [
+                {
+                    "value": 0,
+                    "leaf": true
+                },
+                {
+                    "value": 1,
+                    "leaf": true
+                }
+            ],
+            "member_of": [ [ "E" ] ]
+        },
+        {
+            "measurement": "F",
+            "enabled_by": [ { "m": [ "C", "D" ], "v": [ 0, 1 ] } ],
+            "outcomes": [
+                {
+                    "value": 0,
+                    "leaf": true
+                },
+                {
+                    "value": 1,
+                    "leaf": true
+                }
+            ],
+            "member_of": [ [ "C", "F" ], [ "D", "F" ] ]
+        }
+    ],
+    "outcomes": [
+        { "measurement": "A", "values": [ 0, 1 ] },
+        { "measurement": "B", "values": [ 0, 1 ] },
+        { "measurement": "C", "values": [ 0, 1 ] },
+        { "measurement": "D", "values": [ 0, 1 ] },
+        { "measurement": "E", "values": [ 0, 1 ] },
+        { "measurement": "F", "values": [ 0, 1 ] }
+    ],
+    "enabling_relations": [
+        { "measurement": "A", "enabled_by": [] },
+        { "measurement": "B", "enabled_by": [] },
+        {
+            "measurement": "C",
+            "enabled_by": [
+                { "m": [ "A" ], "v": [ 0 ] },
+                { "m": [ "B" ], "v": [ 0 ] }
+            ]
+        },
+        {
+            "measurement": "D",
+            "enabled_by": [ { "m": [ "A" ], "v": [ 1 ] } ]
+        },
+        {
+            "measurement": "E",
+            "enabled_by": [ { "m": [ "B" ], "v": [ 1 ] } ]
+        },
+        {
+            "measurement": "F",
+            "enabled_by": [ { "m": [ "C", "D" ], "v": [ 0, 1 ] } ]
+        }
+    ],
+    "contextuality_covers": [
+        [ "A", "B" ],
+        [ "A", "C" ],
+        [ "B", "C" ],
+        [ "C", "F" ],
+        [ "D", "F" ],
+        [ "E" ]
+    ],
+    "notes": {
+        "A": "Complex, causal, contextual scenario.",
+        "B": "Unstable because A and B appear in the same cover and can both enable C.",
+        "C": "However, there might be some subtlety that I am missing.",
+        "D": "Perhaps the leaf property should be computed, but that should come naturally if you are generating the structures.",
+        "E": "Now, the enabling relations works as follows: elements in the enabled_by array work as OR,",
+        "F": "so only one relational element in the array needs to be satisfied.",
+        "G": "Within one object, all measurements must have occurred with the corresponding outcomes in the m/v arrays.",
+        "measurements": "{A, B, C, D, E, F}",
+        "outcomes": "{0, 1} for all measurements",
+        "enabling relations": "∅ ⊢ A, ∅ ⊢ B, {(a,0)} ⊢ C, {(a,1)} ⊢ D, {(b,0)} ⊢ C, {(b,1)} ⊢ E, {(c,0),(d,1)} ⊢ F",
+        "context covers": "{{A, B}, {A, C}, {B, C}, {C, F}, {D, F}, {E}}"
+    }
+}

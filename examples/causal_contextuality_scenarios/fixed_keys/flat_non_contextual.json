@@ -1,0 +1,64 @@
+{
+    "measurements": [
+        {
+            "measurement": "X",
+            "enabled_by": [],
+            "outcomes": [
+                {
+                    "value": -1,
+                    "leaf": true
+                },
+                {
+                    "value": 1,
+                    "leaf": true
+                }
+            ],
+            "member_of": [ [ "X", "Y" ] ]
+        },
+        {
+            "measurement": "Y",
+            "enabled_by": [],
+            "outcomes": [
+                {
+                    "value": 42,
+                    "leaf": true
+                },
+                {
+                    "value": -1001,
+                    "leaf": true
+                }
+            ],
+            "member_of": [ [ "X", "Y" ] ]
+        }
+    ],
+    "outcomes": [
+        {
+            "measurement": "X",
+            "values": [-1, 1]
+        },
+        {
+            "measurement": "Y",
+            "values": [42, -1001]
+        }
+    ],
+    "enabling_relations": [
+        {
+            "measurement": "X",
+            "enabled_by": []
+        },
+        {
+            "measurement": "Y",
+            "enabled_by": []
+        }
+    ],
+    "contextuality_covers": [ [ "X", "Y" ] ],
+    "notes": {
+        "A": "Simple, flat, non-contextual scenario.",
+        "B": "Improved how outcomes are shown. This means that outcomes are represented by elements of an array.",
+        "C": "They will always start on 0 and then incrementally go up by 1 like this.",
+        "measurements": "{X, Y}",
+        "outcomes": "{0, 1} for all measurements",
+        "enabling relations": "∅ ⊢ X, ∅ ⊢ Y",
+        "context covers": "{{X, Y}}"
+    }
+}

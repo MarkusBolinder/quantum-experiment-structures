@@ -1,0 +1,77 @@
+{
+    "measurements": {
+        "type": "set",
+        "A": {
+            "type": "measurement",
+            "enabled_by": [],
+            "0": {
+                "type": "outcome",
+                "enables": [ "B" ]
+            },
+            "1": null
+        },
+        "B": {
+            "type": "measurement",
+            "enabled_by": [ { "A": "0" } ],
+            "0": null,
+            "1": {
+                "type": "outcome",
+                "enables": [ "C" ]
+            }
+        },
+        "C": {
+            "type": "measurement",
+            "enabled_by": [ { "B": "1" } ],
+            "0": {
+                "type": "outcome",
+                "enables": [ "D" ]
+            },
+            "1": null
+        },
+        "D": {
+            "type": "measurement",
+            "enabled_by": [ { "C": "0" } ],
+            "0": null,
+            "1": {
+                "type": "outcome",
+                "enables": [ "E" ]
+            }
+        },
+        "E": {
+            "type": "measurement",
+            "enabled_by": [ { "D": "1" } ],
+            "0": null,
+            "1": null
+        }
+    },
+    "outcomes": {
+        "type": "set",
+        "A": ["0", "1"],
+        "B": ["0", "1"],
+        "C": ["0", "1"],
+        "D": ["0", "1"],
+        "E": ["0", "1"]
+    },
+    "enabling_relations": {
+        "type": "set",
+        "A": [],
+        "B": [ { "A": "0" } ],
+        "C": [ { "B": "1" } ],
+        "D": [ { "C": "0" } ],
+        "E": [ { "D": "1" } ]
+    },
+    "context_covers": {
+        "type": "set",
+        "covers": [ [ "A", "B", "C", "D", "E" ] ]
+    },
+    "notes": {
+        "A": "Single chain with 5 levels of causality.",
+        "B": "Should probabilities be present too?",
+        "C": "Should you be able to query everything if they need to be enabled first?",
+        "D": "'enables' does not work well if a measurement setting needs multiple outcomes to be enabled.",
+        "measurements": "{A, B, C, D, E}",
+        "outcomes": "{0, 1} for all measurements",
+        "enabling relations": "∅ ⊢ A, {(a,0)} ⊢ B, {(b,1)} ⊢ C, {(c,0)} ⊢ D, {(d,1)} ⊢ E",
+        "context covers": "{{A, B, C, D, E}}"
+    }
+}

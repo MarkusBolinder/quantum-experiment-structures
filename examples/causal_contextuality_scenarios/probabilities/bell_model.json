@@ -1,0 +1,409 @@
+{
+    "measurements": {
+        "type": "set",
+        "a": {
+            "type": "measurement",
+            "enabled_by": [],
+            "outcomes": [
+                {
+                    "type": "outcome",
+                    "value": 0,
+                    "leaf": true,
+                    "probabilities": [
+                        {
+                            "cover": [ "a", "b" ],
+                            "distribution": [
+                                {
+                                    "event": { "b": 0 },
+                                    "probability": 1.0
+                                },
+                                {
+                                    "event": { "b": 1 },
+                                    "probability": 0.0
+                                }
+                            ]
+                        },
+                        {
+                            "cover": [ "a", "b'" ],
+                            "distribution": [
+                                {
+                                    "event": { "b'": 0 },
+                                    "probability": 0.75
+                                },
+                                {
+                                    "event": { "b'": 1 },
+                                    "probability": 0.25
+                                }
+                            ]
+                        }
+                    ]
+                },
+                {
+                    "type": "outcome",
+                    "value": 1,
+                    "leaf": true,
+                    "probabilities": [
+                        {
+                            "cover": [ "a", "b" ],
+                            "distribution": [
+                                {
+                                    "event": { "b": 0 },
+                                    "probability": 0.0
+                                },
+                                {
+                                    "event": { "b": 1 },
+                                    "probability": 1.0
+                                }
+                            ]
+                        },
+                        {
+                            "cover": [ "a", "b'" ],
+                            "distribution": [
+                                {
+                                    "event": { "b'": 0 },
+                                    "probability": 0.25
+                                },
+                                {
+                                    "event": { "b'": 1 },
+                                    "probability": 0.75
+                                }
+                            ]
+                        }
+                    ]
+                }
+            ],
+            "member_of": [ [ "a", "b" ], [ "a", "b'" ] ]
+        },
+        "b": {
+            "type": "measurement",
+            "enabled_by": [],
+            "outcomes": [
+                {
+                    "type": "outcome",
+                    "value": 0,
+                    "leaf": true,
+                    "probabilities": [
+                        {
+                            "cover": [ "a", "b" ],
+                            "distribution": [
+                                {
+                                    "event": { "a": 0 },
+                                    "probability": 1.0
+                                },
+                                {
+                                    "event": { "a": 1 },
+                                    "probability": 0.0
+                                }
+                            ]
+                        },
+                        {
+                            "cover": [ "a'", "b" ],
+                            "distribution": [
+                                {
+                                    "event": { "a'": 0 },
+                                    "probability": 0.75
+                                },
+                                {
+                                    "event": { "a'": 1 },
+                                    "probability": 0.25
+                                }
+                            ]
+                        }
+                    ]
+                },
+                {
+                    "type": "outcome",
+                    "value": 1,
+                    "leaf": true,
+                    "probabilities": [
+                        {
+                            "cover": [ "a", "b" ],
+                            "distribution": [
+                                {
+                                    "event": { "a": 0 },
+                                    "probability": 0.0
+                                },
+                                {
+                                    "event": { "a": 1 },
+                                    "probability": 1.0
+                                }
+                            ]
+                        },
+                        {
+                            "cover": [ "a'", "b" ],
+                            "distribution": [
+                                {
+                                    "event": { "a'": 0 },
+                                    "probability": 0.25
+                                },
+                                {
+                                    "event": { "a'": 1 },
+                                    "probability": 0.75
+                                }
+                            ]
+                        }
+                    ]
+                }
+            ],
+            "member_of": [ [ "a", "b" ], [ "a'", "b" ] ]
+        },
+        "a'": {
+            "type": "measurement",
+            "enabled_by": [],
+            "outcomes": [
+                {
+                    "type": "outcome",
+                    "value": 0,
+                    "leaf": true,
+                    "probabilities": [
+                        {
+                            "cover": [ "a'", "b" ],
+                            "distribution": [
+                                {
+                                    "event": { "b": 0 },
+                                    "probability": 0.75
+                                },
+                                {
+                                    "event": { "b": 1 },
+                                    "probability": 0.25
+                                }
+                            ]
+                        },
+                        {
+                            "cover": [ "a'", "b'" ],
+                            "distribution": [
+                                {
+                                    "event": { "b'": 0 },
+                                    "probability": 0.25
+                                },
+                                {
+                                    "event": { "b'": 1 },
+                                    "probability": 0.75
+                                }
+                            ]
+                        }
+                    ]
+                },
+                {
+                    "type": "outcome",
+                    "value": 1,
+                    "leaf": true,
+                    "probabilities": [
+                        {
+                            "cover": [ "a'", "b" ],
+                            "distribution": [
+                                {
+                                    "event": { "b": 0 },
+                                    "probability": 0.25
+                                },
+                                {
+                                    "event": { "b": 1 },
+                                    "probability": 0.75
+                                }
+                            ]
+                        },
+                        {
+                            "cover": [ "a'", "b'" ],
+                            "distribution": [
+                                {
+                                    "event": { "b'": 0 },
+                                    "probability": 0.75
+                                },
+                                {
+                                    "event": { "b'": 1 },
+                                    "probability": 0.25
+                                }
+                            ]
+                        }
+                    ]
+                }
+            ],
+            "member_of": [ [ "a'", "b" ], [ "a'", "b'" ] ]
+        },
+        "b'": {
+            "type": "measurement",
+            "enabled_by": [],
+            "outcomes": [
+                {
+                    "type": "outcome",
+                    "value": 0,
+                    "leaf": true,
+                    "probabilities": [
+                        {
+                            "cover": [ "a", "b'" ],
+                            "distribution": [
+                                {
+                                    "event": { "a": 0 },
+                                    "probability": 0.75
+                                },
+                                {
+                                    "event": { "a": 1 },
+                                    "probability": 0.25
+                                }
+                            ]
+                        },
+                        {
+                            "cover": [ "a'", "b'" ],
+                            "distribution": [
+                                {
+                                    "event": { "a'": 0 },
+                                    "probability": 0.25
+                                },
+                                {
+                                    "event": { "a'": 1 },
+                                    "probability": 0.75
+                                }
+                            ]
+                        }
+                    ]
+                },
+                {
+                    "type": "outcome",
+                    "value": 1,
+                    "leaf": true,
+                    "probabilities": [
+                        {
+                            "cover": [ "a", "b'" ],
+                            "distribution": [
+                                {
+                                    "event": { "a": 0 },
+                                    "probability": 0.25
+                                },
+                                {
+                                    "event": { "a": 1 },
+                                    "probability": 0.75
+                                }
+                            ]
+                        },
+                        {
+                            "cover": [ "a'", "b'" ],
+                            "distribution": [
+                                {
+                                    "event": { "a'": 0 },
+                                    "probability": 0.75
+                                },
+                                {
+                                    "event": { "a'": 1 },
+                                    "probability": 0.25
+                                }
+                            ]
+                        }
+                    ]
+                }
+            ],
+            "member_of": [ [ "a", "b'" ], [ "a'", "b'" ] ]
+        }
+    },
+    "outcomes": {
+        "type": "set",
+        "a": [0, 1],
+        "a'": [0, 1],
+        "b": [0, 1],
+        "b'": [0, 1]
+    },
+    "enabling_relations": {
+        "type": "set",
+        "a": [],
+        "a'": [],
+        "b": [],
+        "b'": []
+    },
+    "contextuality_covers": [ [ "a", "b" ], [ "a", "b'" ], [ "a'", "b" ], [ "a'", "b'" ] ],
+    "distributions": [
+        {
+            "cover": [ "a", "b" ],
+            "marginal": [
+                {
+                    "event": { "a": 0, "b": 0 },
+                    "probability": 0.5
+                },
+                {
+                    "event": { "a": 0, "b": 1 },
+                    "probability": 0.0
+                },
+                {
+                    "event": { "a": 1, "b": 0 },
+                    "probability": 0.0
+                },
+                {
+                    "event": { "a": 1, "b": 1 },
+                    "probability": 0.5
+                }
+            ]
+        },
+        {
+            "cover": [ "a", "b'" ],
+            "marginal": [
+                {
+                    "event": { "a": 0, "b'": 0 },
+                    "probability": 0.375
+                },
+                {
+                    "event": { "a": 0, "b'": 1 },
+                    "probability": 0.125
+                },
+                {
+                    "event": { "a": 1, "b'": 0 },
+                    "probability": 0.125
+                },
+                {
+                    "event": { "a": 1, "b'": 1 },
+                    "probability": 0.375
+                }
+            ]
+        },
+        {
+            "cover": [ "a'", "b" ],
+            "marginal": [
+                {
+                    "event": { "a'": 0, "b": 0 },
+                    "probability": 0.375
+                },
+                {
+                    "event": { "a'": 0, "b": 1 },
+                    "probability": 0.125
+                },
+                {
+                    "event": { "a'": 1, "b": 0 },
+                    "probability": 0.125
+                },
+                {
+                    "event": { "a'": 1, "b": 1 },
+                    "probability": 0.375
+                }
+            ]
+        },
+        {
+            "cover": [ "a'", "b'" ],
+            "marginal": [
+                {
+                    "event": { "a'": 0, "b'": 0 },
+                    "probability": 0.125
+                },
+                {
+                    "event": { "a'": 0, "b'": 1 },
+                    "probability": 0.375
+                },
+                {
+                    "event": { "a'": 1, "b'": 0 },
+                    "probability": 0.375
+                },
+                {
+                    "event": { "a'": 1, "b'": 1 },
+                    "probability": 0.125
+                }
+            ]
+        }
+    ],
+    "notes": {
+        "A": "Bipartite Bell-type scenario.",
+        "B": "Added top-level key for the marginal distributions.",
+        "C": "Also included the probabilities in the measurement outcomes.",
+        "D": "Need to condition on outcome to get probabilities in the measurements.",
+        "E": "4.4.1 Abramsky 2011",
+        "measurements": "{a, a', b, b'}",
+        "outcomes": "{0, 1} for all measurements",
+        "enabling relations": "∅ ⊢ X, ∅ ⊢ Y, ∅ ⊢ Z, ∅ ⊢ W",
+        "context covers": "{{a, b}, {a', b}, {a, b'}, {a', b'}}"
+    }
+}

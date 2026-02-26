@@ -1,0 +1,85 @@
+{
+    "measurements": {
+        "type": "set",
+        "X": {
+            "type": "measurement",
+            "enabled_by": [],
+            "outcomes": [
+                {
+                    "type": "outcome",
+                    "value": 0,
+                    "leaf": false
+                },
+                {
+                    "type": "outcome",
+                    "value": 1,
+                    "leaf": true
+                }
+            ],
+            "member_of": [ [ "X", "Z" ] ]
+        },
+        "Y": {
+            "type": "measurement",
+            "enabled_by": [],
+            "outcomes": [
+                {
+                    "type": "outcome",
+                    "value": 0,
+                    "leaf": false
+                },
+                {
+                    "type": "outcome",
+                    "value": 1,
+                    "leaf": true
+                }
+            ],
+            "member_of": [ [ "Y", "Z" ] ]
+        },
+        "Z": {
+            "type": "measurement",
+            "enabled_by": [
+                { "X": 0 },
+                { "Y": 0 }
+            ],
+            "outcomes": [
+                {
+                    "type": "outcome",
+                    "value": 0,
+                    "leaf": true
+                },
+                {
+                    "type": "outcome",
+                    "value": 1,
+                    "leaf": true
+                }
+            ],
+            "member_of": [ [ "X", "Z" ], [ "Y", "Z" ] ]
+        }
+    },
+    "outcomes": {
+        "type": "set",
+        "X": [0, 1],
+        "Y": [0, 1],
+        "Z": [0, 1]
+    },
+    "enabling_relations": {
+        "type": "set",
+        "X": [],
+        "Y": [],
+        "Z": [
+            { "X": 0 },
+            { "Y": 0 }
+        ]
+    },
+    "contextuality_covers": [ [ "X", "Z" ], [ "Y", "Z" ] ],
+    "notes": {
+        "A": "Simple, causal, contextual scenario.",
+        "B": "Example 7.2 Abramsky 2024. Should be stable because X and Y not in the same cover.",
+        "C": "However, there might be some subtlety that I am missing.",
+        "D": "Perhaps the leaf property should be computed, but that should come naturally if you are generating the structures.",
+        "measurements": "{X, Y, Z}",
+        "outcomes": "{0, 1} for all measurements",
+        "enabling relations": "∅ ⊢ X, ∅ ⊢ Y, {(x,0)} ⊢ Z, {(y,0)} ⊢ Z",
+        "context covers": "{{X}, {Y}}"
+    }
+}

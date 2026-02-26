@@ -1,0 +1,144 @@
+{
+    "measurements": {
+        "type": "set",
+        "a": {
+            "type": "measurement",
+            "enabled_by": [],
+            "outcomes": [
+                {
+                    "type": "outcome",
+                    "value": 0,
+                    "leaf": true,
+                    "possible_with": [
+                        { "b": 0 },
+                        { "b'": 0 },
+                        { "b'": 1 }
+                    ]
+                },
+                {
+                    "type": "outcome",
+                    "value": 1,
+                    "leaf": true,
+                    "possible_with": [
+                        { "b": 1 },
+                        { "b'": 0 },
+                        { "b'": 1 }
+                    ]
+                }
+            ],
+            "member_of": [ [ "a", "b" ], [ "a", "b'" ] ]
+        },
+        "b": {
+            "type": "measurement",
+            "enabled_by": [],
+            "outcomes": [
+                {
+                    "type": "outcome",
+                    "value": 0,
+                    "leaf": true,
+                    "possible_with": [
+                        { "a": 0 },
+                        { "a'": 0 },
+                        { "a'": 1 }
+                    ]
+                },
+                {
+                    "type": "outcome",
+                    "value": 1,
+                    "leaf": true,
+                    "possible_with": [
+                        { "a": 1 },
+                        { "a'": 0 },
+                        { "a'": 1 }
+                    ]
+                }
+            ],
+            "member_of": [ [ "a", "b" ], [ "a'", "b" ] ]
+        },
+        "a'": {
+            "type": "measurement",
+            "enabled_by": [],
+            "outcomes": [
+                {
+                    "type": "outcome",
+                    "value": 0,
+                    "leaf": true,
+                    "possible_with": [
+                        { "b": 0 },
+                        { "b": 1 },
+                        { "b'": 0 },
+                        { "b'": 1 }
+                    ]
+                },
+                {
+                    "type": "outcome",
+                    "value": 1,
+                    "leaf": true,
+                    "possible_with": [
+                        { "b": 0 },
+                        { "b": 1 },
+                        { "b'": 0 },
+                        { "b'": 1 }
+                    ]
+                }
+            ],
+            "member_of": [ [ "a'", "b" ], [ "a'", "b'" ] ]
+        },
+        "b'": {
+            "type": "measurement",
+            "enabled_by": [],
+            "outcomes": [
+                {
+                    "type": "outcome",
+                    "value": 0,
+                    "leaf": true,
+                    "possible_with": [
+                        { "a": 0 },
+                        { "a": 1 },
+                        { "a'": 0 },
+                        { "a'": 1 }
+                    ]
+                },
+                {
+                    "type": "outcome",
+                    "value": 1,
+                    "leaf": true,
+                    "possible_with": [
+                        { "a": 0 },
+                        { "a": 1 },
+                        { "a'": 0 },
+                        { "a'": 1 }
+                    ]
+                }
+            ],
+            "member_of": [ [ "a", "b'" ], [ "a'", "b'" ] ]
+        }
+    },
+    "outcomes": {
+        "type": "set",
+        "a": [0, 1],
+        "a'": [0, 1],
+        "b": [0, 1],
+        "b'": [0, 1]
+    },
+    "enabling_relations": {
+        "type": "set",
+        "a": [],
+        "a'": [],
+        "b": [],
+        "b'": []
+    },
+    "contextuality_covers": [ [ "a", "b" ], [ "a", "b'" ], [ "a'", "b" ], [ "a'", "b'" ] ],
+    "notes": {
+        "A": "Bipartite Bell-type scenario.",
+        "B": "Added information about what outcomes are possible with others to recreate the Bell model.",
+        "C": "4.4.1 Abramsky 2011",
+        "D": "A bit ambiguous what e.g. { 'a': 0 } refers to in the possibilit field.",
+        "E": "It could either mean outcome value or the index of the outcome.",
+        "F": "I suppose that would be clearer if the values were different from the indicies.",
+        "measurements": "{a, a', b, b'}",
+        "outcomes": "{0, 1} for all measurements",
+        "enabling relations": "∅ ⊢ X, ∅ ⊢ Y, ∅ ⊢ Z, ∅ ⊢ W",
+        "context covers": "{{a, b}, {a', b}, {a, b'}, {a', b'}}"
+    }
+}

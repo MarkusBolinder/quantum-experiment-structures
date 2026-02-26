@@ -1,0 +1,60 @@
+{
+    "measurements": {
+        "type": "set",
+        "X": {
+            "type": "measurement",
+            "enabled_by": [],
+            "outcomes": [
+                {
+                    "type": "outcome",
+                    "value": 0,
+                    "leaf": false
+                },
+                {
+                    "type": "outcome",
+                    "value": 1,
+                    "leaf": true
+                }
+            ],
+            "member_of": [ [ "X" ] ]
+        },
+        "Y": {
+            "type": "measurement",
+            "enabled_by": [ { "X": 0 } ],
+            "outcomes": [
+                {
+                    "type": "outcome",
+                    "value": 0,
+                    "leaf": true
+                },
+                {
+                    "type": "outcome",
+                    "value": 1,
+                    "leaf": true
+                }
+            ],
+            "member_of": [ [ "Y" ] ]
+        }
+    },
+    "outcomes": {
+        "type": "set",
+        "X": [0, 1],
+        "Y": [0, 1]
+    },
+    "enabling_relations": {
+        "type": "set",
+        "X": [],
+        "Y": [ { "X": 0 } ]
+    },
+    "contextuality_covers": [ [ "X" ], [ "Y" ] ],
+    "notes": {
+        "A": "Simple, causal, non-contextual scenario.",
+        "B": "Improved how outcomes are shown. This means that outcomes are represented by elements of an array.",
+        "C": "They will always start on 0 and then incrementally go up by 1 like this.",
+        "D": "This avoids using numerical string keys.",
+        "measurements": "{X, Y}",
+        "outcomes": "{0, 1} for all measurements",
+        "enabling relations": "∅ ⊢ X, {(x,0)} ⊢ Y",
+        "context covers": "{{X}, {Y}}"
+    }
+}

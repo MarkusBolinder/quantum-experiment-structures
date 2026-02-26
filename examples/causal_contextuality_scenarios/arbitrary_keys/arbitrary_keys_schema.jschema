@@ -1,0 +1,75 @@
+{
+    "type": "object",
+    "required": [ "measurements", "outcomes", "enabling_relations", "contextuality_covers" ],
+    "properties": {
+        "measurements": {
+            "type": "object",
+            "properties": {
+                "type": { "type": "string" }
+            },
+            "additionalProperties": {
+                "type": "object",
+                "properties": {
+                    "type": { "type": "string" },
+                    "enabled_by": {
+                        "type": "array",
+                        "items": {
+                            "type": "object",
+                            "additionalProperties": { "type": "integer" }
+                        }
+                    },
+                    "outcomes": {
+                        "type": "array",
+                        "items": {
+                            "type": "object",
+                            "required": [ "type", "value", "leaf" ],
+                            "properties": {
+                                "type": { "type": "string" },
+                                "value": { "type": "integer" },
+                                "leaf": { "type": "boolean" }
+                            },
+                            "additionalProperties": false
+                        }
+                    },
+                    "member_of": {
+                        "type": "array",
+                        "items": {
+                            "type": "array",
+                            "items": { "type": "string" }
+                        }
+                    }
+                },
+                "additionalProperties": false
+            }
+        },
+        "outcomes": {
+            "type": "object",
+            "properties": { "type": { "type": "string" } },
+            "additionalProperties": {
+                "type": "array",
+                "items": { "type": "integer" }
+            }
+        },
+        "enabling_relations": {
+            "type": "object",
+            "properties": { "type": { "type": "string" } },
+            "additionalProperties": {
+                "type": "array",
+                "items": {
+                    "type": "object",
+                    "additionalProperties": { "type": "integer" }
+                }
+            }
+        },
+        "contextuality_covers": {
+            "type": "array",
+            "items": {
+                "type": "array",
+                "items": { "type": "string" }
+            }
+        },
+        "notes": {
+            "type": "object"
+        }
+    }
+}

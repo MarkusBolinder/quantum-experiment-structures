@@ -1,0 +1,159 @@
+{
+    "measurements": {
+        "type": "set",
+        "A": {
+            "type": "measurement",
+            "enabled_by": [],
+            "outcomes": [
+                {
+                    "type": "outcome",
+                    "value": 0,
+                    "leaf": false
+                },
+                {
+                    "type": "outcome",
+                    "value": 1,
+                    "leaf": false
+                }
+            ],
+            "member_of": [ [ "A", "B" ], [ "A", "C" ] ]
+        },
+        "B": {
+            "type": "measurement",
+            "enabled_by": [],
+            "outcomes": [
+                {
+                    "type": "outcome",
+                    "value": 0,
+                    "leaf": false
+                },
+                {
+                    "type": "outcome",
+                    "value": 1,
+                    "leaf": false
+                }
+            ],
+            "member_of": [ [ "A", "B" ], [ "B", "C" ] ]
+        },
+        "C": {
+            "type": "measurement",
+            "enabled_by": [
+                { "A": 0 },
+                { "B": 0 }
+            ],
+            "outcomes": [
+                {
+                    "type": "outcome",
+                    "value": 0,
+                    "leaf": false
+                },
+                {
+                    "type": "outcome",
+                    "value": 1,
+                    "leaf": true
+                }
+            ],
+            "member_of": [ [ "A", "C" ], [ "B", "C" ], [ "C", "F" ] ]
+        },
+        "D": {
+            "type": "measurement",
+            "enabled_by": [ { "A": 1 } ],
+            "outcomes": [
+                {
+                    "type": "outcome",
+                    "value": 0,
+                    "leaf": true
+                },
+                {
+                    "type": "outcome",
+                    "value": 1,
+                    "leaf": false
+                }
+            ],
+            "member_of": [ [ "D", "F" ] ]
+        },
+        "E": {
+            "type": "measurement",
+            "enabled_by": [ { "B": 1 } ],
+            "outcomes": [
+                {
+                    "type": "outcome",
+                    "value": 0,
+                    "leaf": true
+                },
+                {
+                    "type": "outcome",
+                    "value": 1,
+                    "leaf": true
+                }
+            ],
+            "member_of": [ [ "E" ] ]
+        },
+        "F": {
+            "type": "measurement",
+            "enabled_by": [
+                {
+                    "C": 0,
+                    "D": 1
+                }
+            ],
+            "outcomes": [
+                {
+                    "type": "outcome",
+                    "value": 0,
+                    "leaf": true
+                },
+                {
+                    "type": "outcome",
+                    "value": 1,
+                    "leaf": true
+                }
+            ],
+            "member_of": [ [ "C", "F" ], [ "D", "F" ] ]
+        }
+    },
+    "outcomes": {
+        "type": "set",
+        "A": [0, 1],
+        "B": [0, 1],
+        "C": [0, 1],
+        "D": [0, 1],
+        "E": [0, 1],
+        "F": [0, 1]
+    },
+    "enabling_relations": {
+        "type": "set",
+        "A": [],
+        "B": [],
+        "C": [
+            { "A": 0 },
+            { "B": 0 }
+        ],
+        "D": [ { "A": 1 } ],
+        "E": [ { "B": 1 } ],
+        "F": [
+            {
+                "C": 0,
+                "D": 1
+            }
+        ]
+    },
+    "contextuality_covers": [
+        [ "A", "B" ],
+        [ "A", "C" ],
+        [ "B", "C" ],
+        [ "C", "F" ],
+        [ "D", "F" ],
+        [ "E" ]
+    ],
+    "notes": {
+        "A": "Complex, causal, contextual scenario.",
+        "B": "Unstable because A and B appear in the same cover and can both enable C.",
+        "C": "However, there might be some subtlety that I am missing.",
+        "D": "Perhaps the leaf property should be computed, but that should come naturally if you are generating the structures.",
+        "measurements": "{A, B, C, D, E, F}",
+        "outcomes": "{0, 1} for all measurements",
+        "enabling relations": "∅ ⊢ A, ∅ ⊢ B, {(a,0)} ⊢ C, {(a,1)} ⊢ D, {(b,0)} ⊢ C, {(b,1)} ⊢ E, {(c,0),(d,1)} ⊢ F",
+        "context covers": "{{A, B}, {A, C}, {B, C}, {C, F}, {D, F}, {E}}"
+    }
+}

@@ -1,0 +1,27 @@
+{
+    "M": {
+        "X": [null, null],
+        "Y": [null, null],
+        "Z": [null, null],
+        "W": [null, null]
+    },
+    "O": {
+        "X": [0, 1],
+        "Y": [0, 1],
+        "Z": [0, 1],
+        "W": [0, 1]
+    },
+    "e": {
+        "X": null,
+        "Y": null,
+        "Z": null,
+        "W": null
+    },
+    "C": [ [ "X", "Z" ], [ "X", "W" ], [ "Y", "Z" ], [ "Y", "W" ] ],
+    "notes": {
+        "measurements": "{X, Y, Z, W}",
+        "outcomes": "{0, 1} for all measurements",
+        "enabling relations": "∅ ⊢ X, ∅ ⊢ Y, ∅ ⊢ Z, ∅ ⊢ W",
+        "context covers": "{{X, Z}, {X, W}, {Y, Z}, {Y, W}}"
+    }
+}

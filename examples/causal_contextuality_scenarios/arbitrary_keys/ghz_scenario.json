@@ -1,0 +1,158 @@
+{
+    "measurements": {
+        "type": "set",
+        "A_X": {
+            "type": "measurement",
+            "enabled_by": [],
+            "outcomes": [
+                {
+                    "type": "outcome",
+                    "value": -1,
+                    "leaf": true
+                },
+                {
+                    "type": "outcome",
+                    "value": 1,
+                    "leaf": true
+                }
+            ],
+            "member_of": [
+                [ "A_X", "B_X", "C_X" ],
+                [ "A_X", "B_Y", "C_Y" ]
+            ]
+        },
+        "A_Y": {
+            "type": "measurement",
+            "enabled_by": [],
+            "outcomes": [
+                {
+                    "type": "outcome",
+                    "value": -1,
+                    "leaf": true
+                },
+                {
+                    "type": "outcome",
+                    "value": 1,
+                    "leaf": true
+                }
+            ],
+            "member_of": [
+                [ "A_Y", "B_X", "C_Y" ],
+                [ "A_Y", "B_Y", "C_X" ]
+            ]
+        },
+        "B_X": {
+            "type": "measurement",
+            "enabled_by": [],
+            "outcomes": [
+                {
+                    "type": "outcome",
+                    "value": -1,
+                    "leaf": true
+                },
+                {
+                    "type": "outcome",
+                    "value": 1,
+                    "leaf": true
+                }
+            ],
+            "member_of": [
+                [ "A_X", "B_X", "C_X" ],
+                [ "A_Y", "B_X", "C_Y" ]
+            ]
+        },
+        "B_Y": {
+            "type": "measurement",
+            "enabled_by": [],
+            "outcomes": [
+                {
+                    "type": "outcome",
+                    "value": -1,
+                    "leaf": true
+                },
+                {
+                    "type": "outcome",
+                    "value": 1,
+                    "leaf": true
+                }
+            ],
+            "member_of": [
+                [ "A_X", "B_Y", "C_Y" ],
+                [ "A_Y", "B_Y", "C_X" ]
+            ]
+        },
+        "C_X": {
+            "type": "measurement",
+            "enabled_by": [],
+            "outcomes": [
+                {
+                    "type": "outcome",
+                    "value": -1,
+                    "leaf": true
+                },
+                {
+                    "type": "outcome",
+                    "value": 1,
+                    "leaf": true
+                }
+            ],
+            "member_of": [
+                [ "A_X", "B_X", "C_X" ],
+                [ "A_Y", "B_Y", "C_X" ]
+            ]
+        },
+        "C_Y": {
+            "type": "measurement",
+            "enabled_by": [],
+            "outcomes": [
+                {
+                    "type": "outcome",
+                    "value": -1,
+                    "leaf": true
+                },
+                {
+                    "type": "outcome",
+                    "value": 1,
+                    "leaf": true
+                }
+            ],
+            "member_of": [
+                [ "A_X", "B_Y", "C_Y" ],
+                [ "A_Y", "B_X", "C_Y" ]
+            ]
+        }
+    },
+    "outcomes": {
+        "type": "set",
+        "A_X": [0, 1],
+        "A_Y": [0, 1],
+        "B_X": [0, 1],
+        "B_Y": [0, 1],
+        "C_X": [0, 1],
+        "C_Y": [0, 1]
+    },
+    "enabling_relations": {
+        "type": "set",
+        "A_X": [],
+        "A_Y": [],
+        "B_X": [],
+        "B_Y": [],
+        "C_X": [],
+        "C_Y": []
+    },
+    "contextuality_covers": [
+        [ "A_X", "B_X", "C_X" ],
+        [ "A_X", "B_Y", "C_Y" ],
+        [ "A_Y", "B_X", "C_Y" ],
+        [ "A_Y", "B_Y", "C_X" ]
+    ],
+    "notes": {
+        "A": "GHZ scenario, more complex.",
+        "B": "Measurements are labeled PARTY_SETTING (A_X means party A measures X).",
+        "C": "Added value field to outcomes as the GHZ denotes outcomes as +/- 1.",
+        "measurements": "{X, Y, Z}",
+        "outcomes": "{0, 1} for all measurements",
+        "enabling relations": "∅ ⊢ X, ∅ ⊢ Y, {(x,0)} ⊢ Z, {(y,0)} ⊢Z",
+        "context covers": "{{X, Y}, {Y, Z}}"
+    }
+}

@@ -1,0 +1,98 @@
+{
+    "measurements": {
+        "type": "set",
+        "a": {
+            "type": "measurement",
+            "enabled_by": [],
+            "outcomes": [
+                {
+                    "type": "outcome",
+                    "value": 0,
+                    "leaf": true
+                },
+                {
+                    "type": "outcome",
+                    "value": 1,
+                    "leaf": true
+                }
+            ],
+            "member_of": [ [ "a", "b" ], [ "a", "b'" ] ]
+        },
+        "b": {
+            "type": "measurement",
+            "enabled_by": [],
+            "outcomes": [
+                {
+                    "type": "outcome",
+                    "value": 0,
+                    "leaf": true
+                },
+                {
+                    "type": "outcome",
+                    "value": 1,
+                    "leaf": true
+                }
+            ],
+            "member_of": [ [ "a", "b" ], [ "a'", "b" ] ]
+        },
+        "a'": {
+            "type": "measurement",
+            "enabled_by": [],
+            "outcomes": [
+                {
+                    "type": "outcome",
+                    "value": 0,
+                    "leaf": true
+                },
+                {
+                    "type": "outcome",
+                    "value": 1,
+                    "leaf": true
+                }
+            ],
+            "member_of": [ [ "a'", "b" ], [ "a'", "b'" ] ]
+        },
+        "b'": {
+            "type": "measurement",
+            "enabled_by": [],
+            "outcomes": [
+                {
+                    "type": "outcome",
+                    "value": 0,
+                    "leaf": true
+                },
+                {
+                    "type": "outcome",
+                    "value": 1,
+                    "leaf": true
+                }
+            ],
+            "member_of": [ [ "a", "b'" ], [ "a'", "b'" ] ]
+        }
+    },
+    "outcomes": {
+        "type": "set",
+        "a": [0, 1],
+        "a'": [0, 1],
+        "b": [0, 1],
+        "b'": [0, 1]
+    },
+    "enabling_relations": {
+        "type": "set",
+        "a": [],
+        "a'": [],
+        "b": [],
+        "b'": []
+    },
+    "contextuality_covers": [ [ "a", "b" ], [ "a", "b'" ], [ "a'", "b" ], [ "a'", "b'" ] ],
+    "notes": {
+        "A": "Bipartite Bell-type scenario.",
+        "B": "Should probabilities be present too?",
+        "C": "Can turn it into e.g. PR-box by adding probabilities/possibilities.",
+        "D": "With this format of the outcomes, it is straightforward to add probabilities.",
+        "measurements": "{a, a', b, b'}",
+        "outcomes": "{0, 1} for all measurements",
+        "enabling relations": "∅ ⊢ X, ∅ ⊢ Y, ∅ ⊢ Z, ∅ ⊢ W",
+        "context covers": "{{a, b}, {a', b}, {a, b'}, {a', b'}}"
+    }
+}

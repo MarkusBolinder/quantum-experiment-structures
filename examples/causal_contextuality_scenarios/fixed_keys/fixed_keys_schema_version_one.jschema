@@ -1,0 +1,89 @@
+{
+    "type": "object",
+    "definitions": {
+        "enabled_by": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "properties": {
+                    "m": {
+                        "type": "array",
+                        "items": { "type": "string" }
+                    },
+                    "v": {
+                        "type": "array",
+                        "items": { "type": "integer" }
+                    }
+                },
+                "additionalProperties": false
+            }
+        },
+        "covers": {
+            "type": "array",
+            "items": {
+                "type": "array",
+                "items": { "type": "string" }
+            }
+        }
+    },
+    "required": [ "measurements", "outcomes", "enabling_relations", "contextuality_covers" ],
+    "properties": {
+        "measurements": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "required": [ "measurement", "enabled_by", "outcomes", "member_of" ],
+                "properties": {
+                    "measurement": { "type": "string" },
+                    "enabled_by": { "$ref": "#/definitions/enabled_by" },
+                    "outcomes": {
+                        "type": "array",
+                        "items": {
+                            "type": "object",
+                            "required": [ "value", "leaf" ],
+                            "properties": {
+                                "value": { "type": "integer" },
+                                "leaf": { "type": "boolean" }
+                            },
+                            "additionalProperties": false
+                        }
+                    },
+                    "member_of": { "$ref": "#/definitions/covers" }
+                },
+                "additionalProperties": false
+            }
+        },
+        "outcomes": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "required": [ "measurement", "values" ],
+                "properties": {
+                    "measurement": { "type": "string" },
+                    "values": {
+                        "type": "array",
+                        "items": { "type": "integer" }
+                    }
+                },
+                "additionalProperties": false
+            }
+        },
+        "enabling_relations": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "required": [ "measurement", "enabled_by" ],
+                "properties": {
+                    "measurement": { "type": "string" },
+                    "enabled_by": { "$ref": "#/definitions/enabled_by" }
+                },
+                "additionalProperties": false
+            }
+        },
+        "contextuality_covers": { "$ref": "#/definitions/covers" },
+        "notes": {
+            "type": "object"
+        },
+        "additionalProperties": false
+    }
+}

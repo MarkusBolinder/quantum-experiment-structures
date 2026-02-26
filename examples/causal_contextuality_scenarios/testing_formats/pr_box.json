@@ -1,0 +1,55 @@
+{
+    "M": {
+        "a": {
+            "type": "measurement",
+            "0": {
+                "type": "outcome",
+                "b": { "type": "measurement", "0": null },
+                "b'": { "type": "measurement", "0": null }
+            },
+            "1": {
+                "type": "outcome",
+                "b": { "type": "measurement", "1": null },
+                "b'": { "type": "measurement", "1": null }
+            }
+        },
+        "b": {
+            "type": "measurement",
+            "0": {
+                "type": "outcome",
+                "a": { "type": "measurement", "0": null },
+                "a'": { "type": "measurement", "0": null }
+            },
+            "1": {
+                "type": "outcome",
+                "a": { "type": "measurement", "1": null },
+                "a'": { "type": "measurement", "1": null }
+            }
+        }
+    },
+    "O": {
+        "a": ["0", "1"],
+        "a'": ["0", "1"],
+        "b": ["0", "1"],
+        "b'": ["0", "1"]
+    },
+    "e": {
+        "a": [],
+        "a'": [],
+        "b": [],
+        "b'": []
+    },
+    "C": [ [ "a", "b" ], [ "a", "b'" ], [ "a'", "b" ], [ "a'", "b'" ] ],
+    "notes": {
+        "A": "PR-box",
+        "B": "Makes more sense to have the measurement outcomes as keys to since it allows for logical nesting.",
+        "C": "However, there should be some way to discern what is an outcome and what is a measurement setting...",
+        "D": "Added type key to specify.",
+        "E": "Should probabilities be present too?",
+        "F": "Represent empty set enabling relation with empty array.",
+        "measurements": "{a, a', b, b'}",
+        "outcomes": "{0, 1} for all measurements",
+        "enabling relations": "∅ ⊢ X, ∅ ⊢ Y, ∅ ⊢ Z, ∅ ⊢ W",
+        "context covers": "{{a, b}, {a', b}, {a, b'}, {a', b'}}"
+    }
+}

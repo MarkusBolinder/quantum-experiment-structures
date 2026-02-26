@@ -1,0 +1,67 @@
+{
+    "M": {
+        "type": "set",
+        "A": {
+            "type": "measurement",
+            "0": {
+                "type": "outcome",
+                "B": {
+                    "type": "measurement",
+                    "0": null,
+                    "1": {
+                        "type": "outcome",
+                        "C": {
+                            "type": "measurement",
+                            "0": {
+                                "type": "outcome",
+                                "D": {
+                                    "type": "measurement",
+                                    "0": null,
+                                    "1": {
+                                        "type": "outcome",
+                                        "E": {
+                                            "0": null,
+                                            "1": null
+                                        }
+                                    }
+                                }
+                            },
+                            "1": null
+                        }
+                    }
+                }
+            },
+            "1": null
+        }
+    },
+    "O": {
+        "type": "set",
+        "a": ["0", "1"],
+        "a'": ["0", "1"],
+        "b": ["0", "1"],
+        "b'": ["0", "1"]
+    },
+    "e": {
+        "type": "set",
+        "A": [],
+        "B": [ { "A": "0" } ],
+        "C": [ { "B": "1" } ],
+        "D'": [ { "C": "0" } ],
+        "E": [ { "D": "1" } ]
+    },
+    "C": {
+        "type": "set",
+        "covers": [ ["A", "B", "C", "D", "E" ] ]
+    },
+    "notes": {
+        "A": "Single chain with 5 levels of causality.",
+        "B": "Should probabilities be present too?",
+        "C": "Could potentially include the enabling relations in the measurements too.",
+        "D": "That way all measurements could perhaps be placed top-level, making it easier to query all at once.",
+        "E": "However, should you be able to query everything if they need to be enabled first?",
+        "measurements": "{A, B, C, D, E}",
+        "outcomes": "{0, 1} for all measurements",
+        "enabling relations": "∅ ⊢ A, {(a,0)} ⊢ B, {(b,1)} ⊢ C, {(c,0)} ⊢ D, {(d,1)} ⊢ E",
+        "context covers": "{{A, B, C, D, E}}"
+    }
+}

@@ -1,0 +1,181 @@
+{
+    "measurements": {
+        "type": "set",
+        "A": {
+            "type": "measurement",
+            "enabled_by": [],
+            "0": {
+                "type": "outcome",
+                "leaf": false
+            },
+            "1": {
+                "type": "outcome",
+                "leaf": false
+            },
+            "2": {
+                "type": "outcome",
+                "leaf": false
+            },
+            "member_of": [
+                [ "A", "B", "C", "D", "E" ],
+                [ "A", "B", "C" ],
+                [ "A", "B", "D" ]
+            ]
+        },
+        "B": {
+            "type": "measurement",
+            "enabled_by": [
+                { "A": "1" },
+                { "A": "2" }
+            ],
+            "0": {
+                "type": "outcome",
+                "leaf": false
+            },
+            "1": {
+                "type": "outcome",
+                "leaf": false
+            },
+            "member_of": [
+                [ "A", "B", "C", "D", "E" ],
+                [ "A", "B", "C" ],
+                [ "A", "B", "D" ]
+            ]
+        },
+        "C": {
+            "type": "measurement",
+            "enabled_by": [
+                {
+                    "A": "2",
+                    "B": "0"
+                }
+            ],
+            "0": {
+                "type": "outcome",
+                "leaf": false
+            },
+            "1": {
+                "type": "outcome",
+                "leaf": true
+            },
+            "member_of": [
+                [ "A", "B", "C", "D", "E" ],
+                [ "A", "B", "C" ],
+                [ "C", "D" ]
+            ]
+        },
+        "D": {
+            "type": "measurement",
+            "enabled_by": [
+                {
+                    "A": "0",
+                    "B": "1"
+                },
+                { "C": "0" }
+            ],
+            "0": {
+                "type": "outcome",
+                "leaf": true
+            },
+            "1": {
+                "type": "outcome",
+                "leaf": false
+            },
+            "member_of": [
+                [ "A", "B", "C", "D", "E" ],
+                [ "A", "B", "D" ],
+                [ "C", "D" ]
+            ]
+        },
+        "E": {
+            "type": "measurement",
+            "enabled_by": [
+                {
+                    "A": "1",
+                    "B": "0",
+                    "C": "0",
+                    "D": "1"
+                }
+            ],
+            "0": {
+                "type": "outcome",
+                "leaf": true
+            },
+            "1": {
+                "type": "outcome",
+                "leaf": true
+            },
+            "2": {
+                "type": "outcome",
+                "leaf": true
+            },
+            "3": {
+                "type": "outcome",
+                "leaf": true
+            },
+            "member_of": [
+                [ "A", "B", "C", "D", "E" ],
+                [ "E" ]
+            ]
+        }
+    },
+    "outcomes": {
+        "type": "set",
+        "A": ["0", "1", "2"],
+        "B": ["0", "1"],
+        "C": ["0", "1"],
+        "D": ["0", "1"],
+        "E": ["0", "1", "2", "3"]
+    },
+    "enabling_relations": {
+        "type": "set",
+        "A": [],
+        "B": [
+            { "A": "1" },
+            { "A": "2" }
+        ],
+        "C": [
+            {
+                "A": "2",
+                "B": "0"
+            }
+        ],
+        "D": [
+            {
+                "A": "0",
+                "B": "1"
+            },
+            { "C": "0" }
+        ],
+        "E": [
+            {
+                "A": "1",
+                "B": "0",
+                "C": "0",
+                "D": "1"
+            }
+        ]
+    },
+    "context_covers": {
+        "type": "set",
+        "covers": [
+            [ "A", "B", "C", "D", "E" ],
+            [ "A", "B", "C" ],
+            [ "A", "B", "D" ],
+            [ "C", "D" ],
+            [ "E" ]
+        ]
+    },
+    "notes": {
+        "A": "Complex scenario with multiple branches and covers, some measurements are unreachable through some enabling relations.",
+        "B": "Should probabilities be present too?",
+        "C": "Should you be able to query everything if they need to be enabled first?",
+        "D": "Changed outcomes to show if they are leaves or not.",
+        "E": "An outcome is a leaf if that event (measurement + outcome) is not part of an enabling relation --",
+        "F": "-- even if it is logically impossible to get such an event.",
+        "measurements": "{A, B, C, D, E}",
+        "outcomes": "{0, 1} for all B, C, D; {0, 1, 2} for A, E",
+        "enabling relations": "∅ ⊢ A, {(a,1)} ⊢ B, {(a,2)} ⊢ B, {(a,2),(b,0)} ⊢ C, {(a,0),(b,1)} ⊢ D, {(c,0)} ⊢ D, {(a,1),(b,0),(c,0),(d,1)} ⊢ E",
+        "context covers": "see above"
+    }
+}
