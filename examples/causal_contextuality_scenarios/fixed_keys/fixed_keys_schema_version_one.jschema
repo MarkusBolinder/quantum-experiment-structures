@@ -86,4 +86,5 @@
         },
         "additionalProperties": false
     }
+    "additionalProperties": false
 }
