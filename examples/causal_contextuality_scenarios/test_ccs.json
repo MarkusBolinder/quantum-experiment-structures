@@ -1,0 +1,218 @@
+{
+    "ms": [
+        {
+            "m": "A",
+            "e": [],
+            "o": [
+                {
+                    "v": 0,
+                    "l": false
+                },
+                {
+                    "v": 1,
+                    "l": false
+                }
+            ],
+            "c": [
+                [
+                    "A",
+                    "B"
+                ],
+                [
+                    "A",
+                    "C"
+                ]
+            ]
+        },
+        {
+            "m": "B",
+            "e": [],
+            "o": [
+                {
+                    "v": 0,
+                    "l": false
+                },
+                {
+                    "v": 1,
+                    "l": false
+                }
+            ],
+            "c": [
+                [
+                    "A",
+                    "B"
+                ],
+                [
+                    "B",
+                    "C"
+                ]
+            ]
+        },
+        {
+            "m": "C",
+            "e": [
+                [
+                    {
+                        "m": "A",
+                        "v": 0
+                    }
+                ],
+                [
+                    {
+                        "m": "B",
+                        "v": 0
+                    }
+                ]
+            ],
+            "o": [
+                {
+                    "v": 0,
+                    "l": false
+                },
+                {
+                    "v": 1,
+                    "l": true
+                }
+            ],
+            "c": [
+                [
+                    "A",
+                    "C"
+                ],
+                [
+                    "B",
+                    "C"
+                ],
+                [
+                    "C",
+                    "F"
+                ]
+            ]
+        },
+        {
+            "m": "D",
+            "e": [
+                [
+                    {
+                        "m": "A",
+                        "v": 1
+                    }
+                ]
+            ],
+            "o": [
+                {
+                    "v": 0,
+                    "l": true
+                },
+                {
+                    "v": 1,
+                    "l": false
+                }
+            ],
+            "c": [
+                [
+                    "D",
+                    "F"
+                ]
+            ]
+        },
+        {
+            "m": "E",
+            "e": [
+                [
+                    {
+                        "m": "B",
+                        "v": 1
+                    }
+                ]
+            ],
+            "o": [
+                {
+                    "v": 0,
+                    "l": true
+                },
+                {
+                    "v": 1,
+                    "l": true
+                }
+            ],
+            "c": [
+                ["E"]
+            ]
+        },
+        {
+            "m": "F",
+            "e": [
+                [
+                    {
+                        "m": "C",
+                        "v": 0
+                    },
+                    {
+                        "m": "D",
+                        "v": 1
+                    }
+                ]
+            ],
+            "o": [
+                {
+                    "v": 0,
+                    "l": true
+                },
+                {
+                    "v": 1,
+                    "l": true
+                }
+            ],
+            "c": [
+                [
+                    "C",
+                    "F"
+                ],
+                [
+                    "D",
+                    "F"
+                ]
+            ]
+        }
+    ],
+    "c": [
+        [
+            "A",
+            "B"
+        ],
+        [
+            "A",
+            "C"
+        ],
+        [
+            "B",
+            "C"
+        ],
+        [
+            "C",
+            "F"
+        ],
+        [
+            "D",
+            "F"
+        ],
+        ["E"]
+    ],
+    "n": [
+        "Complex, causal, contextual scenario.",
+        "Unstable because A and B appear in the same cover and can both enable C.",
+        "However, there might be some subtlety that I am missing.",
+        "Perhaps the l property should be computed, but that should come naturally if you are generating the structures.",
+        "Now, the enabling relations works as follows: elements in the e array work as OR,",
+        "so only one relational element in the array needs to be satisfied.",
+        "Within one object, all ms must have occurred with the corresponding o in the m/v arrays.",
+        "Okay to keep below for human readable."
+    ],
+    "h": {
+        "ms": "{A, B, C, D, E, F}",
+        "o": "{0, 1} for all ms",
+        "e": "∅ ⊢ A, ∅ ⊢ B, {(a,0)} ⊢ C, {(a,1)} ⊢ D, {(b,0)} ⊢ C, {(b,1)} ⊢ E, {(c,0),(d,1)} ⊢ F",
+        "c": "{{A, B}, {A, C}, {B, C}, {C, F}, {D, F}, {E}}"
+    }
+}
