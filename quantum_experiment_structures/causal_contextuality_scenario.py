@@ -21,7 +21,7 @@ class CausalContextualityScenario:
     def validate_data(self):
         """Validate the data using the CCS schema."""
         try:
-            jsonschema.validate(self.data, schema=self.schema)
+            jsonschema.validate(self.data, schema=CCS_SCHEMA)
             return True
         except Exception as e:
             print(e)
