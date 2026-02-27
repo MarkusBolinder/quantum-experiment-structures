@@ -1,0 +1,61 @@
+[build-system]
+requires = ["setuptools>=61.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "quantum-experiment-structures"
+version = "0.1.0"
+description = "Module supporting representation and generation of quantum experiment structures."
+readme = "README.md"
+requires-python = ">=3.10"
+authors = [
+    { name = "Markus Bolinder", email = "" }
+]
+license = { text = "MIT" }
+
+# runtime dependencies
+dependencies = [
+    "black",
+    "flake8",
+    "flake8-black",
+    "numpy",
+    "pyproject-flake8",
+]
+per-file-ignores = [
+  "__init__.py:F401",
+]
+
+# black configuration
+[tool.black]
+line-length = 100
+target-version = ["py313"]
+include = '\.pyi?$'
+exclude = '''
+/(
+    \.git
+  | \.hg
+  | \.mypy_cache
+  | \.venv
+  | venv
+  | build
+  | dist
+  | \.eggs
+)/
+'''
+
+[tool.setuptools.packages.find]
+where = ["."]
+exclude = ["unittests*", "examples*"]
+
+[tool.flake8]
+max-line-length = 100
+extend-ignore = ["E203", "W503"]
+exclude = [
+    ".git",
+    "__pycache__",
+    ".venv",
+    "venv",
+    "build",
+    "dist",
+    ".eggs",
+]
