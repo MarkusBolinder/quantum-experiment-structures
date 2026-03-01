@@ -1,14 +1,19 @@
 """Validate a JSON representation of a CCS using both a schema and additional consistency checks."""
 
+from collections import defaultdict
 import json
 from pathlib import Path
 
-import quantum_experiment_structures as qes
 from quantum_experiment_structures.data.schemas import CCS_SCHEMA
 import jsonschema
 
 
 class CausalContextualityScenario:
+    """Python representation of a causal contextuality scenario.
+
+    In addition to just representing the data, a number of methods are supplied which can be
+    leveraged to ensure validity and/or calculate properties of the CCS.
+    """
 
     def __init__(self, json_data):
         """Read, validate and initialize an instance of a causal causal contextuality scenario.
@@ -27,39 +32,145 @@ class CausalContextualityScenario:
             print(e)
             return False
 
-
-    def check_consistency(self):
+    def check_consistency(self, allow_duplicates=False):
         """Ensure that the enabling relations are consistent.
 
         Assume X is a measurement setting with outcomes 0 or 1, then an enabling relation is
         consistent if it does not contain conflicting events for any measurement, meaning the set of
         enabling relations does not contain {(X,0),(X,1)} or similar.
+
+        Args:
+            allow_duplicates: if True, an enabling relation of the form {(X,0),(X,0)} is not treated
+                as a consistency error; if False, then it is.
+        Returns:
+            a boolean indicating if the scenario is consistent (True if yes).
         """
-        pass
+        for measurement in self.data["ms"]:
+            for enabling_relation in measurement["e"]:
+                required = set()
+                for event in enabling_relation:
+                    if not allow_duplicates:
+                        event_id = [event["m"]]
+                    else:
+                        event_id = [event["m"], tuple(event.values())]
+                    # necessary condition: the measurement (event_id[0]) is in the set
+                    # sufficient condition:
+                    # 1) if no duplicates, then the above is sufficient OR
+                    # 2) if duplicates are allowed, then there is a consistency error if the event
+                    #    tuple (event_id[1]) differs, i.e. if the outcome value is different.
+                    if event_id[0] in required and (
+                        not allow_duplicates or event_id[1] not in required
+                    ):
+                        return False
+                    required.update(event_id)
+        return True
 
     def calculate_leafs(self):
         """Iterate through the scenario and determine which measurement outcomes are leaves."""
-        pass
+        # put all events that are part of an enabling relation in a hash set
+        enabling_events = set(
+            tuple(event.values())
+            for measurement in self.data["ms"]
+            for enabling_relation in measurement["e"]
+            for event in enabling_relation
+        )
+        # iterate through all measurement outcomes and mark leaves accordingly
+        for measurement in self.data["ms"]:
+            measurement_variable = measurement["m"]
+            for outcome in measurement["o"]:
+                if (measurement_variable, outcome["v"]) not in enabling_events:
+                    outcome["l"] = True
+                else:
+                    # NOTE: might be redundant, but cost is probably negligible
+                    outcome["l"] = False
 
     def calculate_memberships(self):
-        """Calculate which contexts each measurement setting is part of."""
-        pass
+        """Calculate which contexts each measurement setting is part of.
 
-    def check_unique_contexts(self):
-        """Ensure that the cover does not contains duplicate contexts."""
-        pass
+        Returns:
+            a dict mapping each measurements to all contexts it appears in.
+        """
+        measurement_to_contexts = defaultdict(list)
+        for context in self.data["c"]:
+            for measurement in context:
+                # NOTE: this assumes that there are no duplicate contexts,
+                # nor measurements within the context
+                measurement_to_contexts[measurement].append(context)
+        return measurement_to_contexts
+
+    def check_unique_contexts(self, check_all=True):
+        """Ensure that the cover does not contain duplicate contexts.
+
+        Args:
+            check_all: indicates whether all the contexts for each measurement should be checked for
+            duplicates too. If False, only the top level field 'c' is checked.
+        """
+        # TODO: can frozenset be used everywhere?
+        if check_all:
+            for measurement in self.data["ms"]:
+                contexts = set(frozenset(context) for context in measurement["c"])
+                if len(contexts) != len(measurement["c"]):
+                    return False
+        contexts = set(frozenset(context) for context in self.data["c"])
+        if len(contexts) != len(self.data["c"]):
+            return False
+        return True
+
+    def check_totality_of_union(self):
+        """Ensure that the union of all contexts covers all measurements."""
+        # TODO: if needed, investigate if representing measurements as bit vectors can optimize
+        measurements_in_contexts = set(
+            measurement for context in self.data["c"] for measurement in context
+        )
+        measurements = set([measurement["m"] for measurement in self.data["ms"]])
+        return measurements_in_contexts == measurements
 
     def add_human_readable(self):
         """Add a human readable representation of the CCS to the data."""
-        pass
+        # TODO: cache results that are calculated in methods, or store them as attributes
+        measurements = "{" + ", ".join(measurement["m"] for measurement in self.data["ms"]) + "}"
+        outcomes = {
+            measurement["m"]: set(outcome["v"] for outcome in measurement["o"])
+            for measurement in self.data["ms"]
+        }
+        outcomes_representation = ", ".join(
+            f"O_{measurement} = {values}" for measurement, values in outcomes.items()
+        )
+        enabling_events_per_measurement = {
+            measurement["m"]: [
+                [tuple(event.values()) for event in enabling_relation]
+                for enabling_relation in measurement["e"]
+            ]
+            for measurement in self.data["ms"]
+        }
+        enabling_relations = ", ".join(
+            (
+                f"∅ ⊢ {measurement}"
+                if not events
+                else ", ".join(
+                    f"{{{','.join(f'({x},{v})' for x, v in event)}}} ⊢ {measurement}"
+                    for event in events
+                )
+            )
+            for measurement, events in enabling_events_per_measurement.items()
+        )
+        cover = "{" + ", ".join("{" + ", ".join(context) + "}" for context in self.data["c"]) + "}"
+        self.data["h"] = {
+            "ms": measurements,
+            "o": outcomes_representation,
+            "e": enabling_relations,
+            "c": cover,
+        }
 
     def to_json(self, filename):
         """Flush data to a JSON file.
 
         Args:
-            filename: name of the output file.
+            filename: path-like name of the output file.
         """
-        pass
+        path = Path(filename)
+        with path.open() as f:
+            json.dump(f)
 
     def append_to_json_lines(self, filename):
         """Append the CCS to a JSON lines file specified by filename.
