@@ -98,6 +98,34 @@ class CausalContextualityScenario:
                 measurement_to_contexts[measurement].append(context)
         return measurement_to_contexts
 
+    def check_contexts(self):
+        """Certify that the cover and the memberships are consistent and valid.
+
+        The contexts listed for each measurement should all contain the measurement that they are
+        nested with. Furthermore, all contexts that appear as these 'membership'-contexts should
+        also be present in the top level cover of the scenario.
+        """
+        # TODO: combine this method with totality of cover method, or break into two parts
+        cover = set(frozenset(context) for context in self.data["c"])
+        contexts = set()
+        for measurement in self.data["ms"]:
+            for context in measurement["c"]:
+                context = frozenset(context)
+                if measurement["m"] not in context:
+                    return False
+                contexts.add(context)
+        return cover == contexts
+
+    def check_totality_of_union(self):
+        """Ensure that the union of all contexts covers all measurements and nothing more."""
+        # TODO: if needed, investigate if representing measurements as bit vectors can optimize
+        measurements_in_contexts = set(
+            measurement for context in self.data["c"] for measurement in context
+        )
+        measurements = set(measurement["m"] for measurement in self.data["ms"])
+        # this also returns False if the contexts contain measurements that are not in the scenario
+        return measurements_in_contexts == measurements
+
     def check_unique_contexts(self, check_all=True):
         """Ensure that the cover does not contain duplicate contexts.
 
@@ -115,15 +143,6 @@ class CausalContextualityScenario:
         if len(contexts) != len(self.data["c"]):
             return False
         return True
-
-    def check_totality_of_union(self):
-        """Ensure that the union of all contexts covers all measurements."""
-        # TODO: if needed, investigate if representing measurements as bit vectors can optimize
-        measurements_in_contexts = set(
-            measurement for context in self.data["c"] for measurement in context
-        )
-        measurements = set([measurement["m"] for measurement in self.data["ms"]])
-        return measurements_in_contexts == measurements
 
     def add_human_readable(self):
         """Add a human readable representation of the CCS to the data."""
