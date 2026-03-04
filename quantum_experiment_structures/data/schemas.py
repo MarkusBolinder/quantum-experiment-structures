@@ -16,7 +16,6 @@ CCS_SCHEMA = {
                 },
             },
         },
-        "cover": {"type": "array", "items": {"type": "array", "items": {"type": "string"}}},
     },
     "required": ["ms", "c"],
     "properties": {
@@ -36,13 +35,23 @@ CCS_SCHEMA = {
                             "properties": {"v": {"type": "integer"}, "l": {"type": "boolean"}},
                             "additionalProperties": False,
                         },
+                        "minItems": 1,
                     },
-                    "c": {"$ref": "#/$defs/cover"},
+                    # no 'minItems'-requirement here because it can be calculated from the rest
+                    "c": {
+                        "type": "array",
+                        "items": {"type": "array", "items": {"type": "string"}},
+                    },
                 },
                 "additionalProperties": False,
             },
+            "minItems": 1,
         },
-        "c": {"$ref": "#/$defs/cover"},
+        "c": {
+            "type": "array",
+            "items": {"type": "array", "items": {"type": "string"}},
+            "minItems": 1,
+        },
         "n": {"type": "array", "items": {"type": "string"}},
         "h": {
             "type": "object",
