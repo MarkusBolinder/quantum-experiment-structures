@@ -14,8 +14,27 @@
                         "v": { "type": "integer" }
                     },
                     "additionalProperties": false
-                }
-            }
+                },
+                "uniqueItems": true,
+                "minItems": 1
+            },
+            "uniqueItems": true
+        },
+        "contexts": {
+            "type": "array",
+            "items": {
+                "type": "array",
+                "items": { "type": "string" },
+                "uniqueItems": true,
+                "minItems": 1
+            },
+            "uniqueItems": true
+        },
+        "cover": {
+            "allOf": [
+                { "$ref": "#/$defs/contexts" },
+                { "minItems": 1 }
+            ]
         }
     },
     "required": [ "ms", "c" ],
@@ -32,35 +51,24 @@
                         "type": "array",
                         "items": {
                             "type": "object",
-                            "required": [ "v", "l" ],
+                            "required": [ "v" ],
                             "properties": {
                                 "v": { "type": "integer" },
                                 "l": { "type": "boolean" }
                             },
                             "additionalProperties": false
                         },
+                        "uniqueItems": true,
                         "minItems": 1
                     },
-                    "c": {
-                        "type": "array",
-                        "items": {
-                            "type": "array",
-                            "items": { "type": "string" }
-                        }
-                    }
+                    "c": { "$ref": "#/$defs/contexts" }
                 },
                 "additionalProperties": false
             },
+            "uniqueItems": true,
             "minItems": 1
         },
-        "c": {
-            "type": "array",
-            "items": {
-                "type": "array",
-                "items": { "type": "string" }
-            },
-            "minItems": 1
-        },
+        "c": { "$ref": "#/$defs/cover" },
         "n": {
             "type": "array",
             "items": { "type": "string" }
