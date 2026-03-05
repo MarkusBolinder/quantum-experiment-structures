@@ -42,7 +42,7 @@ CCS_SCHEMA = {
             "type": "array",
             "items": {
                 "type": "object",
-                "required": ["m", "e", "o", "c"],
+                "required": ["m", "e", "o"],
                 "properties": {
                     "m": {"type": "string"},
                     "e": {"$ref": "#/$defs/enabled_by"},
