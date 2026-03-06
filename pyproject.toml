@@ -9,7 +9,7 @@ description = "Module supporting representation and generation of quantum experi
 readme = "README.md"
 requires-python = ">=3.10"
 authors = [
-    { name = "Markus Bolinder", email = "" }
+    { name = "Markus Bolinder", email = "mbolinder@ethz.ch" }
 ]
 license = { text = "MIT" }
 
@@ -21,9 +21,10 @@ dependencies = [
     "numpy",
     "pyproject-flake8",
 ]
-per-file-ignores = [
-  "__init__.py:F401",
-]
+
+[project.scripts]
+ccs_generator = "quantum_experiment_structures.utils.ccs_generator_script:main"
+
 
 # black configuration
 [tool.black]
