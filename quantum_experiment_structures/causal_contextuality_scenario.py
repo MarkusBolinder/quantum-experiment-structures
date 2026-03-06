@@ -25,6 +25,11 @@ class CausalContextualityScenario:
         self.data = json_data
         self.measurements = set(measurement["m"] for measurement in self.data["ms"])
 
+    def __repr__(self):
+        if "h" in self.data:
+            return "\n".join(f"{k:6s}: {v}" for k, v in self.data["h"].items())
+        return self.data
+
     def validate(self):
         """Validate the data using the CCS schema."""
         try:
@@ -270,6 +275,9 @@ class CausalContextualityScenario:
             filename: path-like name of the output file.
         """
         path = Path(filename)
+        if not path.suffix:
+            path = path.with_suffix(".json")
+
         with path.open("w") as f:
             json.dump(self.data, f, indent=indent)
 
@@ -283,6 +291,8 @@ class CausalContextualityScenario:
             filename: path-like name of the .jsonl file.
         """
         path = Path(filename)
+        if not path.suffix:
+            path = path.with_suffix(".jsonl")
 
         with path.open("a") as f:
             json.dump(self.data, f)
