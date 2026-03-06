@@ -4,6 +4,7 @@ __all__ = ["generator", "causal_contextuality_scenario", "data", "utils"]
 from . import generator  # noqa: F401
 from . import causal_contextuality_scenario  # noqa: F401
 from .causal_contextuality_scenario import CausalContextualityScenario  # noqa: F401
+from .generator import CCSGenerator  # noqa: F401
 
 # subpackage
 from . import data  # noqa: F401
