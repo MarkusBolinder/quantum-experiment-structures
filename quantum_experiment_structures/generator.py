@@ -303,7 +303,6 @@ class CCSGenerator:
             - Uses self.rng throughout to guarantee deterministic behavior when seeded.
 
         Side effects:
-            - Prints some diagnostic information for each validated CCS (via ccs.data["h"]).
             - Appends validated qes.CausalContextualityScenario objects to self.scenarios.
             - May call _handle_output() which writes files to disk when configured.
         """
@@ -472,8 +471,13 @@ class CCSGenerator:
             # update the set of missing measurements
             missing -= context
             contexts_set.add(context)
-        # if we have not yet created >= n_contexts: sample some more
-        while len(contexts_set) < n_contexts:
+        # if we have not yet created >= n_contexts: try sample some more
+        # NOTE: for now we use a lazy approach, but perhaps it might be worth calculating the number
+        # of possible contexts given the context_size_range and binomial coefficients, and then use
+        # some heuristic based on this to determine whether it is worth trying to sample more
+        for _ in range(max(0, n_contexts - len(contexts_set))):
+            # NOTE: this means that the parameter n_contexts_range is approximative at best and
+            # heavily dependent on the number of measurements and the allowed context sizes
             size = self.rng.randint(min_context_size, max_context_size)
             context = frozenset(self.rng.sample(measurements, size))
             contexts_set.add(context)
