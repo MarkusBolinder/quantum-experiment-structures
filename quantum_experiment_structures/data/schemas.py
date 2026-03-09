@@ -82,3 +82,62 @@ CCS_SCHEMA = {
     },
     "additionalProperties": False,
 }
+
+CCS_GENERATOR_SETTINGS_SCHEMA = {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+        "n_measurements_range": {
+            "type": "array",
+            "items": {"type": "integer", "minimum": 1},
+            "minItems": 2,
+            "maxItems": 2,
+            "default": [3, 6],
+        },
+        "n_values_range": {
+            "type": "array",
+            "items": {"type": "integer", "minimum": 1},
+            "minItems": 2,
+            "maxItems": 2,
+            "default": [2, 2],
+        },
+        "n_contexts_range": {
+            "type": "array",
+            "items": {"type": "integer", "minimum": 1},
+            "minItems": 2,
+            "maxItems": 2,
+            "default": [2, 5],
+        },
+        "context_size_range": {
+            "type": "array",
+            "items": {"type": "integer", "minimum": 1},
+            "minItems": 2,
+            "maxItems": 2,
+            "default": [2, 3],
+        },
+        "n_alternatives_range": {
+            "type": "array",
+            "items": {"type": "integer", "minimum": 0},
+            "minItems": 2,
+            "maxItems": 2,
+            "default": [0, 3],
+        },
+        "enabling_relation_size_range": {
+            "type": "array",
+            "items": {"type": "integer", "minimum": 1},
+            "minItems": 2,
+            "maxItems": 2,
+            "default": [1, 4],
+        },
+        "n_samples_per_causal_structure": {"type": "integer", "default": 1, "minimum": 1},
+        "p_has_enabled": {"type": "number", "default": 0.6, "minimum": 0.0, "maximum": 1.0},
+        "n_alternatives_mean": {"type": "number", "default": 1.2, "minimum": 0.0},
+        "enabling_relation_size_mean": {"type": "number", "default": 1.3, "minimum": 0.0},
+        "no_lexicographic_order": {"type": "boolean", "default": False},
+        "output_dir": {"oneOf": [{"type": "string"}, {"type": "null"}], "default": None},
+        "batch_size": {"type": "integer", "default": 1, "minimum": 1},
+        "n_scenarios": {"type": "integer", "default": 1, "minimum": 1},
+        "seed": {"oneOf": [{"type": "integer"}, {"type": "null"}], "default": None},
+    },
+    "additionalProperties": False,
+}
