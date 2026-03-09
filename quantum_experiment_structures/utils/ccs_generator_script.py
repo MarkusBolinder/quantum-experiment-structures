@@ -42,8 +42,15 @@ import argparse
 
 import quantum_experiment_structures as qes
 from quantum_experiment_structures.utils import utils
+from quantum_experiment_structures.data.schemas import CCS_GENERATOR_SETTINGS_SCHEMA
 
-# TODO: add as script to pyproject.toml so it can be run when pip installing
+
+def _default_value(key):
+    """Return the schema specified default value for 'key'."""
+    value = CCS_GENERATOR_SETTINGS_SCHEMA["properties"][key]["default"]
+    if key.endswith("range"):
+        return ":".join(str(x) for x in value)
+    return value
 
 
 def main():
@@ -63,7 +70,7 @@ def main():
     )
     parser.add_argument(
         "--n-measurements-range",
-        default="3:6",
+        default=_default_value("n_measurements_range"),
         metavar="MEASUREMENTS_RANGE",
         help="\nRange for number of measurements to generate."
         "\nUse 'k' or 'min:max' (integers)."
@@ -71,7 +78,7 @@ def main():
     )
     parser.add_argument(
         "--n-values-range",
-        default="2:2",
+        default=_default_value("n_values_range"),
         metavar="VALUES_RANGE",
         help="Range for number of outcomes per measurement. "
         "\nUse 'k' or 'min:max' (integers)."
@@ -79,7 +86,7 @@ def main():
     )
     parser.add_argument(
         "--n-contexts-range",
-        default="2:5",
+        default=_default_value("n_contexts_range"),
         metavar="CONTEXTS_RANGE",
         help="Range for number of contexts to sample."
         "\nUse 'k' or 'min:max' (integers)."
@@ -87,7 +94,7 @@ def main():
     )
     parser.add_argument(
         "--context-size-range",
-        default="2:3",
+        default=_default_value("context_size_range"),
         metavar="CONTEXT_SIZE_RANGE",
         help="Range for size of a context."
         "\nUse 'k' or 'min:max' (integers)."
@@ -95,7 +102,7 @@ def main():
     )
     parser.add_argument(
         "--n-alternatives-range",
-        default="0:3",
+        default=_default_value("n_alternatives_range"),
         metavar="ENABLING_RELATIONS_RANGE",
         help="Maximum number of alternative enabling relations per measurement. "
         "\nUse 'k' or 'min:max' (integers)."
@@ -103,64 +110,64 @@ def main():
     )
     parser.add_argument(
         "--enabling-relation-size-range",
-        default="1:4",
+        default=_default_value("enabling_relation_size_range"),
         metavar="ENABLING_RELATION_SIZE_RANGE",
         help="Range of sizes for a single enabling relation (default: number of measurements - 1)."
         "\nUse 'k' or 'min:max' (integers)."
         "\nYou can submit any string that has exactly one or two integers in it.",
     )
     parser.add_argument(
-        "--n_samples_per_causal_structure",
+        "--n-samples-per-causal-structure",
         type=int,
-        default=1,
+        default=_default_value("n_samples_per_causal_structure"),
         help="Number of covers to generate given a causal scenario (a set of enabling relations).",
     )
     parser.add_argument(
         "--p-has-enabled",
         type=float,
-        default=0.6,
+        default=_default_value("p_has_enabled"),
         help="Probability that a measurement has enabling relations. Must be between 0 and 1.",
     )
     parser.add_argument(
         "--n-alternatives-mean",
         type=float,
-        default=1.2,
+        default=_default_value("n_alternatives_mean"),
         help="Mean number of alternative enabling relations (outer array).",
     )
     parser.add_argument(
         "--enabling-relation-size-mean",
         type=float,
-        default=1.3,
+        default=_default_value("enabling_relation_size_mean"),
         help="Mean number of events per enabling relation (inner array).",
     )
     parser.add_argument(
-        "--use-lexicographic-order",
+        "--no-lexicographic-order",
         action="store_true",
-        help="Use lexicographic order when imposing an order to ensure acyclicity.\n"
-        "Otherwise, a random order is chosen.",
+        help="Do not use lexicographic order when imposing an order to ensure acyclicity.\n"
+        "This means that a random order is chosen.",
     )
     parser.add_argument(
         "--output-dir",
-        default=None,
+        default=_default_value("output_dir"),
         help="Directory to write generated scenarios.",
     )
     parser.add_argument(
         "--batch-size",
         type=int,
-        default=1,
+        default=_default_value("batch_size"),
         help="Number of lines to write per JSON Lines in the output.\nIf this is 1, then write the "
         "data to regular JSON files instead.",
     )
     parser.add_argument(
         "--n-scenarios",
         type=int,
-        default=1,
+        default=_default_value("n_scenarios"),
         help="Number of scenarios to generate.",
     )
     parser.add_argument(
         "--seed",
         type=int,
-        default=None,
+        default=_default_value("seed"),
         help="Random seed for reproducibility.",
     )
     args = parser.parse_args()
@@ -174,6 +181,13 @@ def main():
     # initialize the generator and generate causal contextuality scenarios
     generator = qes.CCSGenerator(**kwargs)
     generator.generate()
+
+    # print the results if they are not saved
+    if kwargs.get("output_dir") is None:
+        # TODO: print so it can be piped to jq?
+        for i, ccs in enumerate(generator.scenarios):
+            print(f"\nCCS {i}")
+            print(ccs)
 
 
 if __name__ == "__main__":

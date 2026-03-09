@@ -3,6 +3,8 @@
 import argparse
 import re
 
+import jsonschema
+
 
 def _parse_range(s):
     """Parse a range expression given as a string and return a pair of integers.
@@ -27,13 +29,34 @@ def _parse_range(s):
         ValueError: If the input string does not contain exactly one or two integer tokens or if
         the parsing logic fails to extract the expected counts.
     """
-    int_range = tuple(int(match) for match in re.findall(r"\d+", s))
+    int_range = list(int(match) for match in re.findall(r"\d+", s))
     n_ints = len(int_range)
     if n_ints == 1:
         return int_range * 2
     if n_ints != 2:
         raise ValueError(f"Expected pattern with one or two integers but got {int_range}.")
     return int_range
+
+
+def extend_with_default(validator_class):
+    """Create a validator that populates defaults."""
+
+    validate_properties = validator_class.VALIDATORS["properties"]
+
+    def set_defaults(validator, properties, instance, schema):
+        if not isinstance(instance, dict):
+            return
+
+        for prop, subschema in properties.items():
+            if "default" in subschema:
+                instance.setdefault(prop, subschema["default"])
+
+        yield from validate_properties(validator, properties, instance, schema)
+
+    return jsonschema.validators.extend(validator_class, {"properties": set_defaults})
+
+
+DefaultValuesValidator = extend_with_default(jsonschema.Draft202012Validator)
 
 
 class ArgparseFormatter(

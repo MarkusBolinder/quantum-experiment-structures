@@ -48,6 +48,8 @@ import random
 import string
 
 import quantum_experiment_structures as qes
+from quantum_experiment_structures.data.schemas import CCS_GENERATOR_SETTINGS_SCHEMA
+from quantum_experiment_structures.utils import utils
 
 # NOTE: need to pip install local package to be able to run this as a script
 # it can be run as a module using:
@@ -56,7 +58,6 @@ import quantum_experiment_structures as qes
 #   python quantum_experiment_structures/generator.py [OPTIONS]
 
 # TODO: add type checking/annotations
-# TODO: change the generator so that it yields data instead perhaps (better for memory?)
 
 
 class CCSGenerator:
@@ -116,8 +117,8 @@ class CCSGenerator:
                 measurement.
             enabling_relation_size_mean (float):
                 Mean size of an enabling relation.
-            use_lexicographic_order (bool):
-                If True, impose lexicographic ordering on measurements
+            no_lexicographic_order (bool):
+                If False, impose lexicographic ordering on measurements
                 when constructing enabling relations to guarantee
                 acyclicity. Otherwise, a random order is used.
 
@@ -164,6 +165,11 @@ class CCSGenerator:
         """
         # TODO: think about in-memory processing vs. streaming the data
         self.settings = kwargs
+
+        # insert default values and check values with the schema for the settings
+        validator = utils.DefaultValuesValidator(CCS_GENERATOR_SETTINGS_SCHEMA)
+        validator.validate(self.settings)
+
         # extract program level kwargs, i.e. those that are not specifying the generation of a
         # single causal cotextuality scenario
         self.seed = self.settings.pop("seed")
@@ -172,77 +178,33 @@ class CCSGenerator:
         self.n_contexts_per_causal_structure = self.settings.pop("n_samples_per_causal_structure")
         self.n_scenarios = self.settings.pop("n_scenarios")
         self.batch_size = self.settings.pop("batch_size")
+
         # initialize other attributes
         if self.output_dir is not None:
             os.makedirs(self.output_dir, exist_ok=True)
             self.n_file_magnitude = math.ceil(math.log(self.n_scenarios / self.batch_size, 10))
             self._batch_number = 0  # used to keep track of the current file to write to
+
         self.scenarios = []
         self.measurement_outcomes_dict = measurement_outcomes_dict
+
         # correct and check the settings
-        self._add_default_values()
         self._check_ranges()
-
-    def _add_default_values(self):
-        """Populate missing generation settings with sensible defaults.
-
-        This private helper inspects self.settings and inserts default values for any missing
-        configuration keys that the generator depends on. Defaults include ranges for numbers
-        of measurements, values, contexts, context sizes, and internal parameters controlling the
-        stochastic distributions for alternatives and enabling-relation sizes, as well as flags
-        affecting ordering and acyclicity.
-
-        Behavior:
-            - Does not override keys already present in self.settings.
-            - Adds defaults for keys such as:
-                'n_measurements_range', 'n_values_range', 'n_contexts_range', 'context_size_range',
-                'n_alternatives_range', 'enabling_relation_size_range',
-                'n_samples_per_causal_structure', 'p_has_enabled', 'n_alternatives_mean',
-                'enabling_relation_size_mean', 'use_lexicographic_order', 'n_scenarios'.
-
-        Notes:
-            - This function centralizes "magic literals" used elsewhere; changing defaults here
-              alters generator behavior globally.
-        """
-        # TODO: tune all the magic literals/define them somewhere else
-        # TODO: create JSON Schema for the settings and include default items etc there.
-        default_items = [
-            ("n_measurements_range", (3, 6)),
-            ("n_values_range", (2, 2)),
-            ("n_contexts_range", (2, 5)),
-            ("context_size_range", (2, 3)),
-            ("n_alternatives_range", (0, 3)),
-            ("enabling_relation_size_range", (1, 4)),
-            ("n_samples_per_causal_structure", 1),
-            ("p_has_enabled", 0.6),
-            ("n_alternatives_mean", 1.2),
-            ("enabling_relation_size_mean", 1.3),
-            ("use_lexicographic_order", False),
-            ("n_scenarios", 1),
-        ]
-        for key, value in default_items:
-            if key not in self.settings:
-                self.settings[key] = value
 
     def _check_ranges(self):
         """Validate all settings in self.settings that are expressed as ranges.
 
-        Iterates through self.settings and for any key whose name ends with 'range' verifies that:
-        - The tuple contains two integers (min_val, max_val).
-        - min_val and max_val satisfy lower bounds (typically >= 1), except for
-          'n_alternatives_range' which allows a lower bound of 0.
-        - min_val <= max_val.
+        The only thing that is not checked by the schema is if the range is ascending, i.e. if the
+        first value is smaller than or equal to the second value.
 
         Raises:
-            ValueError: If any range violates lower bounds or if min_val > max_val. This prevents
-            generating nonsensical parameters later in the pipeline.
+            ValueError: If any range violates if min_val > max_val. This prevents
+                generating nonsensical parameters later in the pipeline.
         """
         for key, value in self.settings.items():
             if key.endswith("range"):
                 min_val, max_val = value
-                # zero alternative enabling relations means that the scenario is flat.
-                lower_bound = 0 if key == "n_alternatives_range" else 1
-                if min_val < lower_bound or max_val < lower_bound or min_val > max_val:
+                if min_val > max_val:
                     raise ValueError(f"Invalid range of values for {key}: {value}")
 
     def _handle_output(self):
@@ -279,6 +241,7 @@ class CCSGenerator:
                 ccs.to_json(path)
                 self._batch_number += 1
 
+    # TODO: change the generator so that it yields data instead perhaps (better for memory?)
     def generate(self):
         """Generate random causal contextuality scenarios and validate them.
 
@@ -418,7 +381,6 @@ class CCSGenerator:
                 break
 
     def sample_contexts(self, measurements):
-        # TODO: fix docstring
         """Sample a collection of contexts (list of measurement names) that forms a cover.
 
         The method probabilistically constructs a set of contexts such that every measurement
@@ -542,8 +504,7 @@ class CCSGenerator:
         a pair (measurement m, allowed outcome v). A measurement may have zero or more alternative
         enabling relations (outer list). To maintain acyclicity, only measurements that appear
         before the target in a chosen order may be used as enablers; the order is either
-        lexicographic (when use_lexicographic_order is True) or a random topological order sampled
-        by shuffling.
+        lexicographic (this is the default) or a random topological order sampled by shuffling.
 
         Behavior and parameters (read from self.settings):
             - 'p_has_enabled': probability that a target measurement has any enabling relations at
@@ -553,13 +514,13 @@ class CCSGenerator:
             - 'enabling_relation_size_mean' and 'enabling_relation_size_range': control the number
               of events in each enabling relation (i.e., how many distinct enabler measurements
               participate).
-            - If use_lexicographic_order is False the generator shuffles measurements to produce a
+            - If no_lexicographic_order is True the generator shuffles measurements to produce a
               random topological order; enablers are always chosen from measurements that occur
               earlier in that order.
 
         Args:
-            measurements (Sequence[str]): Ordered sequence of measurement names (the order may be
-                shuffled internally unless use_lexicographic_order is True).
+            measurements (Sequence[str]): Ordered sequence of measurement names (the order is
+                shuffled internally when no_lexicographic_order is True).
             outcomes (dict[str, Sequence[int]]): Mapping from measurement name to list/sequence of
                 allowed outcome values (integers). Values are sampled uniformly when creating
                 events.
@@ -582,12 +543,12 @@ class CCSGenerator:
         enabling_relation_size_mean = self.settings["enabling_relation_size_mean"]
         min_alternatives, max_alternatives = self.settings["n_alternatives_range"]
         min_relation_size, max_relation_size = self.settings["enabling_relation_size_range"]
-        use_lexicographic_order = self.settings["use_lexicographic_order"]
+        no_lexicographic_order = self.settings["no_lexicographic_order"]
 
         # to ensure an acyclic causal contextuality scenario, enforce an order
         # x can enable y if x appears before y in the order
         order = list(measurements)
-        if not use_lexicographic_order:
+        if no_lexicographic_order:
             # random topological ordering
             self.rng.shuffle(order)
 
@@ -603,6 +564,8 @@ class CCSGenerator:
 
         enabled_by = dict()
 
+        # TODO: look over this logic as it seems that enabling relations are rarer than they are
+        # supposed to be, could also be a problem in _weighted_count_sample
         for target in measurements:
             enabled_by[target] = []
             # decide whether target has any enabling relations at all
