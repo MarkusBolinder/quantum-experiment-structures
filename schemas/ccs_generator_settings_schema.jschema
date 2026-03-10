@@ -1,48 +1,50 @@
 {
     "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "$defs": {
+        "range": {
+            "type": "array",
+            "items": { "type": "integer", "minimum": 1 },
+            "minItems": 2,
+            "maxItems": 2
+        }
+    },
     "type": "object",
     "properties": {
         "n_measurements_range": {
-            "type": "array",
-            "items": { "type": "integer", "minimum": 1 },
-            "minItems": 2,
-            "maxItems": 2,
-            "default": [3, 6]
+            "allOf": [
+                { "$ref": "#/$defs/range" },
+                { "default": [3, 6] }
+            ]
         },
         "n_values_range": {
-            "type": "array",
-            "items": { "type": "integer", "minimum": 1 },
-            "minItems": 2,
-            "maxItems": 2,
-            "default": [2, 2]
+            "allOf": [
+                { "$ref": "#/$defs/range" },
+                { "default": [2, 2] }
+            ]
         },
         "n_contexts_range": {
-            "type": "array",
-            "items": { "type": "integer", "minimum": 1 },
-            "minItems": 2,
-            "maxItems": 2,
-            "default": [2, 5]
+            "allOf": [
+                { "$ref": "#/$defs/range" },
+                { "default": [2, 5] }
+            ]
         },
         "context_size_range": {
-            "type": "array",
-            "items": { "type": "integer", "minimum": 1 },
-            "minItems": 2,
-            "maxItems": 2,
-            "default": [2, 3]
+            "allOf": [
+                { "$ref": "#/$defs/range" },
+                { "default": [2, 3] }
+            ]
         },
         "n_alternatives_range": {
-            "type": "array",
-            "items": { "type": "integer", "minimum": 0 },
-            "minItems": 2,
-            "maxItems": 2,
-            "default": [0, 3]
+            "allOf": [
+                { "$ref": "#/$defs/range" },
+                { "default": [1, 3] }
+            ]
         },
         "enabling_relation_size_range": {
-            "type": "array",
-            "items": { "type": "integer", "minimum": 1 },
-            "minItems": 2,
-            "maxItems": 2,
-            "default": [1, 4]
+            "allOf": [
+                { "$ref": "#/$defs/range" },
+                { "default": [1, 4] }
+            ]
         },
         "n_samples_per_causal_structure": {
             "type": "integer",
