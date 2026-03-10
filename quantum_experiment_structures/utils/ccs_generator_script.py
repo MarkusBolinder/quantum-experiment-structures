@@ -47,7 +47,15 @@ from quantum_experiment_structures.data.schemas import CCS_GENERATOR_SETTINGS_SC
 
 def _default_value(key):
     """Return the schema specified default value for 'key'."""
-    value = CCS_GENERATOR_SETTINGS_SCHEMA["properties"][key]["default"]
+    key_obj = CCS_GENERATOR_SETTINGS_SCHEMA["properties"][key]
+    if "allOf" in key_obj:
+        value = None
+        for obj in key_obj["allOf"]:
+            if "default" in obj:
+                value = obj["default"]
+                break
+    else:
+        value = key_obj["default"]
     if key.endswith("range"):
         return ":".join(str(x) for x in value)
     return value
@@ -120,7 +128,7 @@ def main():
         "--n-samples-per-causal-structure",
         type=int,
         default=_default_value("n_samples_per_causal_structure"),
-        help="Number of covers to generate given a causal scenario (a set of enabling relations).",
+        help="Number of covers for a given a causal scenario (a set of enabling relations).",
     )
     parser.add_argument(
         "--p-has-enabled",
