@@ -20,6 +20,7 @@ dependencies = [
     "flake8-black",
     "numpy",
     "pyproject-flake8",
+    "pyspark",
 ]
 
 [project.scripts]
