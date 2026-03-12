@@ -39,17 +39,45 @@ def _parse_range(s):
 
 
 def extend_with_default(validator_class):
-    """Create a validator that populates defaults."""
+    """Create a validator that populates defaults.
+
+    Finds defaults either directly on the property subschema or inside combination keywords
+    ('allOf', 'anyOf', 'oneOf') so that schemas like
+    '{"allOf": [{"$ref": "#/$defs/range"}, {"default": [3,6]}]}' work.
+    """
 
     validate_properties = validator_class.VALIDATORS["properties"]
+
+    def _find_default(schema_fragment):
+        """Recursively search schema_fragment for a 'default' value.
+
+        Looks at the fragment itself and then at combination keywords ('allOf', 'anyOf', 'oneOf').
+
+        Returns:
+            if there exists a default value, (default, True) is returned; if not, (False,) is
+            returned. This is to allow falsy default values in the schema.
+        """
+        if not isinstance(schema_fragment, dict):
+            return (False,)
+        if "default" in schema_fragment:
+            return (schema_fragment["default"], True)
+        for comb in ("allOf", "anyOf", "oneOf"):
+            members = schema_fragment.get(comb)
+            if isinstance(members, list):
+                for member in members:
+                    d = _find_default(member)
+                    if any(d):
+                        return d
+        return (False,)
 
     def set_defaults(validator, properties, instance, schema):
         if not isinstance(instance, dict):
             return
 
         for prop, subschema in properties.items():
-            if "default" in subschema:
-                instance.setdefault(prop, subschema["default"])
+            default_value = _find_default(subschema)
+            if any(default_value):
+                instance.setdefault(prop, default_value[0])
 
         yield from validate_properties(validator, properties, instance, schema)
 
