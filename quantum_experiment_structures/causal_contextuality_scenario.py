@@ -24,6 +24,7 @@ class CausalContextualityScenario:
         """
         self.data = json_data
         self.measurements = set(measurement["m"] for measurement in self.data["ms"])
+        self.cover = set(frozenset(context) for context in self.data["c"])
 
     def __repr__(self):
         if "h" in self.data:
@@ -149,8 +150,12 @@ class CausalContextualityScenario:
         The contexts listed for each measurement should all contain the measurement that they are
         nested with. Furthermore, all contexts that appear as these 'membership'-contexts should
         also be present in the top level cover of the scenario.
+
+        Furthermore, the schema can check that there are no duplicate arrays, however, this only
+        checks uniqueness up to (not including) order within the array. For example, the following
+        cover is valid against the schema [ ["A", "B"], ["B", "A"] ], but contains duplicate
+        contexts. The schema only flags covers like [ ["A", "B"], ["A", "B"] ] as invalid.
         """
-        cover = set(frozenset(context) for context in self.data["c"])
         contexts = set()
         for measurement in self.data["ms"]:
             for context in measurement["c"]:
@@ -158,7 +163,7 @@ class CausalContextualityScenario:
                 if measurement["m"] not in context:
                     return False
                 contexts.add(context)
-        return cover == contexts
+        return self.cover == contexts and len(contexts) == len(self.data["c"])
 
     def check_cover(self):
         """Ensure union of all contexts in the cover covers all measurements and nothing more.
@@ -253,6 +258,14 @@ class CausalContextualityScenario:
                     return False
         return True
 
+    def sort_data(self):
+        """Sort the cover, contexts and measurement lexicographically w.r.t. measurement names."""
+        for measurement in self.data["ms"]:
+            if "c" in measurement:
+                measurement["c"] = sorted(sorted(context) for context in measurement["c"])
+        self.data["ms"] = sorted(self.data["ms"], key=lambda measurement: measurement["m"])
+        self.data["c"] = sorted(sorted(context) for context in self.data["c"])
+
     def all_checks(self):
         """Perform all checks."""
         for name, member in inspect.getmembers(self):
@@ -302,6 +315,8 @@ class CausalContextualityScenario:
         # first validate against schema
         if not self.validate():
             raise jsonschema.ValidationError()
+        # sort data for readability/quality of life
+        self.sort_data()
         # then add missing fields
         self.all_adds()
         # then check that everything is correct
