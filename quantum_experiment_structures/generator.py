@@ -207,6 +207,86 @@ class CCSGenerator:
                 if min_val > max_val:
                     raise ValueError(f"Invalid range of values for {key}: {value}")
 
+    def generate(self):
+        # TODO: add docstring
+        ccs_generator = self._ccs_generator()
+
+        def _get_path():
+            return (
+                Path(self.output_dir) / f"part_{self._batch_number:0{self.n_file_magnitude}}.jsonl"
+            )
+
+        if self.output_dir is not None:
+            json_lines = self.batch_size > 1
+            if json_lines:
+                while True:
+                    i = 0
+                    path = _get_path()
+                    try:
+                        # FIXME: opens a file even though there may not be any data to write,
+                        # meaning that the output has an empty file
+                        f = path.open("a")
+                        while i < self.batch_size:
+                            ccs = next(ccs_generator)
+                            json.dump(ccs.data, f)
+                            f.write("\n")
+                            i += 1
+                    except StopIteration:
+                        break  # we reached the end of the generator: break out of outer loop
+                    finally:
+                        f.close()  # make sure to always close the file
+                    self._batch_number += 1
+            else:
+                for ccs in ccs_generator:
+                    path = _get_path()
+                    ccs.to_json(path)
+                    self._batch_number += 1
+        # NOTE: the generator will be empty if output_dir is not None
+        return ccs_generator
+
+    def _ccs_generator(self):
+        i = 0
+        while i < self.n_scenarios:
+            # 1) determine how many measurements and outcomes per measurement and which values
+            measurements, outcomes = self.sample_measurements_and_outcomes()
+            # 2) randomly create causal structure
+            enabling_relations_dict = self.generate_enabling_relations(measurements, outcomes)
+
+            for _ in range(self.n_contexts_per_causal_structure):
+                # 3) randomly sample a number of subsets of the contexts and union must equal cover
+                contexts = self.sample_contexts(measurements)
+
+                # 4) construct the scenario dict
+                scenario = {
+                    "ms": [
+                        {
+                            "m": measurement,
+                            "e": enabling_relations_dict[measurement],
+                            "o": [
+                                {
+                                    "v": v,
+                                    # calclate leaf below, in 5)
+                                }
+                                for v in outcomes[measurement]
+                            ],
+                            # calculate the memberships below, in 5)
+                        }
+                        for measurement in measurements
+                    ],
+                    "c": contexts,
+                }
+
+                # 5) instantiate CCS and validate
+                ccs = qes.CausalContextualityScenario(scenario)
+                if ccs.everything():
+                    # yield the validated scenario immediately
+                    yield ccs
+
+                    i += 1
+                    if i >= self.n_scenarios:
+                        # TODO: could just return here probably
+                        break
+
     def _handle_output(self):
         """Flush generated scenarios in memory to disk in batches according to self.batch_size.
 
@@ -242,7 +322,7 @@ class CCSGenerator:
                 self._batch_number += 1
 
     # TODO: change the generator so that it yields data instead perhaps (better for memory?)
-    def generate(self):
+    def generate_in_memory(self):
         """Generate random causal contextuality scenarios and validate them.
 
         This is the main driver method. It repeatedly samples measurement sets and outcome ranges,
@@ -564,8 +644,6 @@ class CCSGenerator:
 
         enabled_by = dict()
 
-        # TODO: look over this logic as it seems that enabling relations are rarer than they are
-        # supposed to be, could also be a problem in _weighted_count_sample
         for target in measurements:
             enabled_by[target] = []
             # decide whether target has any enabling relations at all
