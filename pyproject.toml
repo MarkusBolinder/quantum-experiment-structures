@@ -19,6 +19,8 @@ dependencies = [
     "flake8",
     "flake8-black",
     "numpy",
+    "pandas",
+    "pyarrow>=15.0.0",
     "pyproject-flake8",
     "pyspark",
 ]
