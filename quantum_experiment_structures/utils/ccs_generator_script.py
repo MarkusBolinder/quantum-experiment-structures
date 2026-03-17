@@ -188,14 +188,12 @@ def main():
 
     # initialize the generator and generate causal contextuality scenarios
     generator = qes.CCSGenerator(**kwargs)
-    generator.generate()
 
-    # print the results if they are not saved
-    if kwargs.get("output_dir") is None:
-        # TODO: print so it can be piped to jq?
-        for i, ccs in enumerate(generator.scenarios):
-            print(f"\nCCS {i}")
-            print(ccs)
+    # print the generated data
+    # if the data was saved to disk, the generator should be empty
+    for i, ccs in enumerate(generator.generate()):
+        print(f"\nCCS {i}")
+        print(ccs)
 
 
 if __name__ == "__main__":
