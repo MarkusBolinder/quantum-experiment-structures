@@ -1,0 +1,143 @@
+{
+    "fields": [
+        {
+            "metadata": {},
+            "name": "c",
+            "nullable": true,
+            "type": {
+                "containsNull": true,
+                "elementType": {
+                    "containsNull": true,
+                    "elementType": "string",
+                    "type": "array"
+                },
+                "type": "array"
+            }
+        },
+        {
+            "metadata": {},
+            "name": "h",
+            "nullable": true,
+            "type": {
+                "fields": [
+                    {
+                        "metadata": {},
+                        "name": "c",
+                        "nullable": true,
+                        "type": "string"
+                    },
+                    {
+                        "metadata": {},
+                        "name": "e",
+                        "nullable": true,
+                        "type": "string"
+                    },
+                    {
+                        "metadata": {},
+                        "name": "ms",
+                        "nullable": true,
+                        "type": "string"
+                    },
+                    {
+                        "metadata": {},
+                        "name": "o",
+                        "nullable": true,
+                        "type": "string"
+                    }
+                ],
+                "type": "struct"
+            }
+        },
+        {
+            "metadata": {},
+            "name": "ms",
+            "nullable": true,
+            "type": {
+                "containsNull": true,
+                "elementType": {
+                    "fields": [
+                        {
+                            "metadata": {},
+                            "name": "c",
+                            "nullable": true,
+                            "type": {
+                                "containsNull": true,
+                                "elementType": {
+                                    "containsNull": true,
+                                    "elementType": "string",
+                                    "type": "array"
+                                },
+                                "type": "array"
+                            }
+                        },
+                        {
+                            "metadata": {},
+                            "name": "e",
+                            "nullable": true,
+                            "type": {
+                                "containsNull": true,
+                                "elementType": {
+                                    "containsNull": true,
+                                    "elementType": {
+                                        "fields": [
+                                            {
+                                                "metadata": {},
+                                                "name": "m",
+                                                "nullable": true,
+                                                "type": "string"
+                                            },
+                                            {
+                                                "metadata": {},
+                                                "name": "v",
+                                                "nullable": true,
+                                                "type": "long"
+                                            }
+                                        ],
+                                        "type": "struct"
+                                    },
+                                    "type": "array"
+                                },
+                                "type": "array"
+                            }
+                        },
+                        {
+                            "metadata": {},
+                            "name": "m",
+                            "nullable": true,
+                            "type": "string"
+                        },
+                        {
+                            "metadata": {},
+                            "name": "o",
+                            "nullable": true,
+                            "type": {
+                                "containsNull": true,
+                                "elementType": {
+                                    "fields": [
+                                        {
+                                            "metadata": {},
+                                            "name": "l",
+                                            "nullable": true,
+                                            "type": "boolean"
+                                        },
+                                        {
+                                            "metadata": {},
+                                            "name": "v",
+                                            "nullable": true,
+                                            "type": "long"
+                                        }
+                                    ],
+                                    "type": "struct"
+                                },
+                                "type": "array"
+                            }
+                        }
+                    ],
+                    "type": "struct"
+                },
+                "type": "array"
+            }
+        }
+    ],
+    "type": "struct"
+}
