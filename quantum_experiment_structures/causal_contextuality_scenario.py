@@ -241,12 +241,12 @@ class CausalContextualityScenario:
             "c": cover,
         }
 
-    # TODO: investigate how this should be handled
-    def wip_check_no_superset_contexts(self):
+    def check_anti_chain(self):
         """Check that no context is a superset of another context.
 
         In the contextuality setting, it is not meaningful to have contexts that are supersets of
-        other contexts, since you could simply always choose the larger context.
+        other contexts, since you could simply always choose the larger context. This is referred to
+        as the cover being an anti-chain, hence the name.
         """
         if len(self.data["c"]) < 2:
             return True
@@ -314,7 +314,7 @@ class CausalContextualityScenario:
     def everything(self):
         # first validate against schema
         if not self.validate():
-            raise jsonschema.ValidationError()
+            raise jsonschema.ValidationError("The data is not valid against the schema.")
         # sort data for readability/quality of life
         self.sort_data()
         # then add missing fields
