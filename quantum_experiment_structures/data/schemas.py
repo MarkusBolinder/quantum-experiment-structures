@@ -113,3 +113,177 @@ CCS_GENERATOR_SETTINGS_SCHEMA = {
     },
     "additionalProperties": False,
 }
+
+SPACETIME_GAME_SCHEMA = {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "$defs": {
+        "id": {"type": "string"},
+        "player": {"type": "string"},
+        "action": {"type": "string"},
+        "node": {"type": "string"},
+        "info_set": {"type": "string"},
+        "assignment": {
+            "type": "object",
+            "required": ["i", "a"],
+            "properties": {"i": {"$ref": "#/$defs/info_set"}, "a": {"$ref": "#/$defs/action"}},
+            "additionalProperties": False,
+        },
+        "payoff": {
+            "type": "object",
+            "required": ["p", "v"],
+            "properties": {"p": {"$ref": "#/$defs/player"}, "v": {"type": "number"}},
+            "additionalProperties": False,
+        },
+    },
+    "required": ["ps", "ns", "es", "is"],
+    "properties": {
+        "ps": {
+            "type": "array",
+            "items": {"$ref": "#/$defs/player"},
+            "uniqueItems": True,
+            "minItems": 1,
+        },
+        "as": {"type": "array", "items": {"$ref": "#/$defs/action"}, "uniqueItems": True},
+        "ns": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "required": ["n", "p", "a"],
+                "properties": {
+                    "n": {"$ref": "#/$defs/node"},
+                    "p": {"$ref": "#/$defs/player"},
+                    "a": {
+                        "type": "array",
+                        "items": {"$ref": "#/$defs/action"},
+                        "uniqueItems": True,
+                        "minItems": 1,
+                    },
+                    "i": {
+                        "type": "array",
+                        "items": {"$ref": "#/$defs/info_set"},
+                        "uniqueItems": True,
+                    },
+                    "l": {"type": "boolean"},
+                },
+                "additionalProperties": False,
+            },
+            "uniqueItems": True,
+            "minItems": 1,
+        },
+        "es": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "required": ["f", "t", "a"],
+                "properties": {
+                    "f": {"$ref": "#/$defs/node"},
+                    "t": {"$ref": "#/$defs/node"},
+                    "a": {"$ref": "#/$defs/action"},
+                },
+                "additionalProperties": False,
+            },
+            "uniqueItems": True,
+        },
+        "is": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "required": ["i", "n"],
+                "properties": {
+                    "i": {"$ref": "#/$defs/info_set"},
+                    "n": {
+                        "type": "array",
+                        "items": {"$ref": "#/$defs/node"},
+                        "uniqueItems": True,
+                        "minItems": 1,
+                    },
+                    "p": {"$ref": "#/$defs/player"},
+                    "a": {
+                        "type": "array",
+                        "items": {"$ref": "#/$defs/action"},
+                        "uniqueItems": True,
+                    },
+                    "l": {"type": "boolean"},
+                },
+                "additionalProperties": False,
+            },
+            "uniqueItems": True,
+            "minItems": 1,
+        },
+        "z": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "required": ["z", "h"],
+                "properties": {
+                    "z": {"$ref": "#/$defs/id"},
+                    "h": {
+                        "type": "array",
+                        "items": {"$ref": "#/$defs/assignment"},
+                        "uniqueItems": True,
+                        "minItems": 1,
+                    },
+                    "p": {
+                        "type": "array",
+                        "items": {"$ref": "#/$defs/info_set"},
+                        "uniqueItems": True,
+                    },
+                    "l": {"type": "boolean"},
+                    "u": {
+                        "type": "array",
+                        "items": {"$ref": "#/$defs/payoff"},
+                        "uniqueItems": True,
+                    },
+                },
+                "additionalProperties": False,
+                "allOf": [
+                    {
+                        "if": {"properties": {"l": {"const": True}}, "required": ["l"]},
+                        "then": {"required": ["u"], "properties": {"u": {"minItems": 1}}},
+                    }
+                ],
+            },
+            "uniqueItems": True,
+            "minItems": 1,
+        },
+        "u": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "required": ["p", "u"],
+                "properties": {
+                    "p": {"$ref": "#/$defs/player"},
+                    "u": {
+                        "type": "array",
+                        "items": {
+                            "type": "object",
+                            "required": ["z", "v"],
+                            "properties": {"z": {"$ref": "#/$defs/id"}, "v": {"type": "number"}},
+                            "additionalProperties": False,
+                        },
+                        "uniqueItems": True,
+                    },
+                },
+                "additionalProperties": False,
+            },
+            "uniqueItems": True,
+            "minItems": 1,
+        },
+        "n": {"type": "array", "items": {"type": "string"}},
+        "h": {
+            "type": "object",
+            "required": ["ps", "ns", "es", "is", "z", "u"],
+            "properties": {
+                "ps": {"type": "string"},
+                "ns": {"type": "string"},
+                "es": {"type": "string"},
+                "is": {"type": "string"},
+                "z": {"type": "string"},
+                "u": {"type": "string"},
+            },
+            "additionalProperties": False,
+        },
+    },
+    "additionalProperties": False,
+}
