@@ -208,7 +208,15 @@ class CCSGenerator:
                     raise ValueError(f"Invalid range of values for {key}: {value}")
 
     def generate(self):
-        # TODO: add docstring
+        """Generate random causal contextuality scenarios and validate them.
+
+        This is the main generator wrapper that handles I/O for the generator.
+
+        Returns:
+            Generator object containing all generated scenarios if output_dir is None. If output_dir
+            is not None, the scenarios will be written by iterating over the generator object,
+            meaning that the returned generator will be empty.
+        """
         ccs_generator = self._ccs_generator()
 
         def _get_path():
@@ -222,19 +230,22 @@ class CCSGenerator:
                 while True:
                     i = 0
                     path = _get_path()
+                    is_open = False
                     try:
-                        # FIXME: opens a file even though there may not be any data to write,
-                        # meaning that the output has an empty file
-                        f = path.open("a")
                         while i < self.batch_size:
                             ccs = next(ccs_generator)
+                            f = path.open("a")
+                            is_open = True
                             json.dump(ccs.data, f)
                             f.write("\n")
                             i += 1
                     except StopIteration:
+                        # TODO: if we somehow do not get StopIteration, we will loop forever
+                        # -- Could this happen?
                         break  # we reached the end of the generator: break out of outer loop
                     finally:
-                        f.close()  # make sure to always close the file
+                        if is_open:
+                            f.close()  # make sure to always close the file
                     self._batch_number += 1
             else:
                 for ccs in ccs_generator:
@@ -245,6 +256,26 @@ class CCSGenerator:
         return ccs_generator
 
     def _ccs_generator(self):
+        """Yield randomly generated causal contextuality scenarios.
+
+        It repeatedly samples measurement sets and outcome ranges, constructs a random acyclic
+        causal structure (enabling relations), samples one or more covers for that causal structure,
+        instantiates a CausalContextualityScenario validates the resulting CCS and collects
+        successful scenarios.
+
+        Algorithm overview:
+            1. Sample measurements and allowed outcomes via sample_measurements_and_outcomes().
+            2. Create enabling relations for each measurement via generate_enabling_relations().
+            3. For each causal structure, sample n_contexts_per_causal_structure covers using
+               sample_contexts().
+            4. Build a scenario dict with keys 'ms' (measurements metadata) and 'c' (contexts).
+            5. Instantiate qes.CausalContextualityScenario(scenario) and validate by calling
+               ccs.everything(). Only validated scenarios are appended to self.scenarios.
+            6. When self.output_dir is set and keep an open file for appending the scenarios until
+               self.batch_size is reached (then we open a new file) or we reach the end of the
+               generator.
+            7. Return the generator object, which will be empty if output_dir is set.
+        """
         i = 0
         while i < self.n_scenarios:
             # 1) determine how many measurements and outcomes per measurement and which values
@@ -255,6 +286,7 @@ class CCSGenerator:
             for _ in range(self.n_contexts_per_causal_structure):
                 # 3) randomly sample a number of subsets of the contexts and union must equal cover
                 contexts = self.sample_contexts(measurements)
+                cover = self.create_anti_chain(contexts)
 
                 # 4) construct the scenario dict
                 scenario = {
@@ -273,7 +305,7 @@ class CCSGenerator:
                         }
                         for measurement in measurements
                     ],
-                    "c": contexts,
+                    "c": cover,
                 }
 
                 # 5) instantiate CCS and validate
@@ -320,83 +352,6 @@ class CCSGenerator:
                 path = Path(self.output_dir) / f"part_{self._batch_number:0{self.n_file_magnitude}}"
                 ccs.to_json(path)
                 self._batch_number += 1
-
-    # TODO: change the generator so that it yields data instead perhaps (better for memory?)
-    def generate_in_memory(self):
-        """Generate random causal contextuality scenarios and validate them.
-
-        This is the main driver method. It repeatedly samples measurement sets and outcome ranges,
-        constructs a random acyclic causal structure (enabling relations), samples one or more
-        covers for that causal structure, instantiates a CausalContextualityScenario validates
-        the resulting CCS and collects successful scenarios.
-
-        Algorithm overview:
-            1. Sample measurements and allowed outcomes via sample_measurements_and_outcomes().
-            2. Create enabling relations for each measurement via generate_enabling_relations().
-            3. For each causal structure, sample n_contexts_per_causal_structure covers using
-               sample_contexts().
-            4. Build a scenario dict with keys 'ms' (measurements metadata) and 'c' (contexts).
-            5. Instantiate qes.CausalContextualityScenario(scenario) and validate by calling
-               ccs.everything(). Only validated scenarios are appended to self.scenarios.
-            6. When self.output_dir is set and enough scenarios are collected to reach
-               self.batch_size, call _handle_output() and clear self.scenarios to release memory.
-
-        Loop control:
-            - Stops when i (the counter of successfully created scenarios) reaches self.n_scenarios.
-            - Uses self.rng throughout to guarantee deterministic behavior when seeded.
-
-        Side effects:
-            - Appends validated qes.CausalContextualityScenario objects to self.scenarios.
-            - May call _handle_output() which writes files to disk when configured.
-        """
-        # since we may generate multiple covers for a single set of enabling relations, we manually
-        # increment the index keeping track of the number of ccs that have been created
-        i = 0
-        while i < self.n_scenarios:
-            # 1) determine how many measurements and outcomes per measurement and which values
-            measurements, outcomes = self.sample_measurements_and_outcomes()
-            # 2) randomly create causal structure
-            enabling_relations_dict = self.generate_enabling_relations(measurements, outcomes)
-            # TODO: add parameter for the number of contexts to sample for a given causal structure
-            for _ in range(self.n_contexts_per_causal_structure):
-                # 3) randomly sample a number of subsets of the contexts and union must equal cover
-                contexts = self.sample_contexts(measurements)
-
-                # 4) construct the scenario dict
-                scenario = {
-                    "ms": [
-                        {
-                            "m": measurement,
-                            "e": enabling_relations_dict[measurement],
-                            "o": [
-                                {
-                                    "v": v,
-                                    # calclate leaf below, in 5)
-                                }
-                                for v in outcomes[measurement]
-                            ],
-                            # calculate the memberships below, in 5)
-                        }
-                        for measurement in measurements
-                    ],
-                    "c": contexts,
-                }
-
-                # 5) instantiate CCS and validate
-                ccs = qes.CausalContextualityScenario(scenario)
-                if ccs.everything():
-                    self.scenarios.append(ccs)
-                    # we have now successfully created another scenario: increment counter
-                    i += 1
-                    # flush data when we have reached the batch size or this is the last scenario
-                    if self.output_dir is not None and (
-                        len(self.scenarios) >= self.batch_size or i == self.n_scenarios
-                    ):
-                        self._handle_output()
-                        # reset data structure to avoid to much data in memory
-                        self.scenarios = []
-                    if i >= self.n_scenarios:
-                        break
 
     def _generate_measurement_names(self, n):
         """Create an ordered of measurement names of length n following a spreadsheet-like scheme.
@@ -460,6 +415,40 @@ class CCSGenerator:
             if i < 0:
                 break
 
+    def create_anti_chain(self, contexts):
+        """Prune contexts that are subsets of other contexts to create an anti-chain.
+
+        The definition of a cover, as given by Abramsky and Brandenburger (2011), states that it
+        should be an anti-chain, which means that if c, c' ∈ C and c' ⊆ c then c = c'. The easiest
+        way to ensure this is by only keeping the maximal elements in the cover, which also
+        guarantees that the cover is still covering all measurements.
+
+
+        Args:
+            contexts: a list of sets containing the measurement names.
+
+        Returns:
+            the pruned cover, which will be an anti-chain
+        """
+        n = len(contexts)
+        # interpret subset_matrix[i][j] as the answer to the question "Is c_i a subset of c_j?"
+        subset_matrix = [[False] * n for _ in range(n)]
+        for i, c1 in enumerate(contexts):
+            for j, c2 in enumerate(contexts[i + 1 :], start=i + 1):
+                intersection = c1 & c2
+                if intersection == c1:
+                    # c1 is a subset of c2 (=> c2 is not a subset of c1)
+                    subset_matrix[i][j] = True
+                elif intersection == c2:
+                    # c2 is a subset of c1
+                    subset_matrix[j][i] = True
+                # neither is a subset of the other, so do not modify the matrix
+
+        # if row i in subset_matrix has any True, then c_i is a subset of some other context
+        # (the diagonal entries are set to False to avoid counting being a subset of itself)
+        cover = [list(contexts[i]) for i in range(n) if not any(subset_matrix[i])]
+        return cover
+
     def sample_contexts(self, measurements):
         """Sample a collection of contexts (list of measurement names) that forms a cover.
 
@@ -482,7 +471,7 @@ class CCSGenerator:
             measurements (Sequence[str]): sequence of measurement names to create a cover over.
 
         Returns:
-            list[list[str]]: A list of contexts, each context is a list of measurement names.
+            list[set[str]]: A list of contexts, each context is a frozenset of measurement names.
 
         Raises:
             RuntimeError: If no contexts could be sampled (should not be possible).
@@ -528,9 +517,7 @@ class CCSGenerator:
             # should not be able to happen
             raise RuntimeError("Failed to sample any contexts")
 
-        contexts = [list(ctx) for ctx in contexts_set]
-
-        return contexts
+        return [context for context in contexts_set]
 
     def _weighted_count_sample(self, mean, min_k, max_k):
         """Sample an integer from {min_k, ..., max_k} with an exponentially decaying weight.
