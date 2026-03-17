@@ -1,9 +1,11 @@
 """Collection of helpful functions and classes."""
 
 import argparse
+import json
 import re
 
 import jsonschema
+import numpy as np
 
 
 def _parse_range(s):
@@ -85,6 +87,19 @@ def extend_with_default(validator_class):
 
 
 DefaultValuesValidator = extend_with_default(jsonschema.Draft202012Validator)
+
+
+class NumpyEncoder(json.JSONEncoder):
+    """Special JSON encoder for numpy types."""
+
+    def default(self, obj):
+        if isinstance(obj, np.integer):
+            return int(obj)
+        elif isinstance(obj, np.floating):
+            return float(obj)
+        elif isinstance(obj, np.ndarray):
+            return obj.tolist()
+        return json.JSONEncoder.default(self, obj)
 
 
 class ArgparseFormatter(
