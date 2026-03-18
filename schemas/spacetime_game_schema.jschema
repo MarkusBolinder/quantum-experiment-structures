@@ -3,9 +3,54 @@
     "type": "object",
     "$defs": {
         "id": { "type": "string" },
+        "string_array": {
+            "type": "array",
+            "items": { "type": "string" },
+            "uniqueItems": true,
+            "minItems": 1
+        },
         "player": { "type": "string" },
         "action": { "type": "string" },
-        "node": { "type": "string" },
+        "node": {
+            "type": "object",
+            "required": [ "n", "ps", "cn" ],
+            "properties": {
+                "n": { "type": "string" },
+                "ps": {
+                    "type": "array",
+                    "items": {
+                        "type": "object",
+                        "required": [ "p", "a" ],
+                        "properties": {
+                            "p": { "type": "string" },
+                            "a": { "type": "string" }
+                        },
+                        "additionalProperties": false
+                    },
+                    "uniqueItems": true
+                },
+                "cn": {
+                    "type": "array",
+                    "items": {
+                        "type": "object",
+                        "required": [ "c", "a" ],
+                        "properties": {
+                            "c": { "type": "string" },
+                            "a": { "type": "string" }
+                        },
+                        "additionalProperties": false
+                    },
+                    "uniqueItems": true
+                }
+            },
+            "additionalProperties": false
+        },
+        "history_or_strategy": {
+            "type": "array",
+            "items": { "$ref": "#/$defs/assignment" },
+            "uniqueItems": true,
+            "minItems": 1
+        },
         "info_set": { "type": "string" },
         "assignment": {
             "type": "object",
@@ -26,79 +71,25 @@
             "additionalProperties": false
         }
     },
-    "required": [ "ps", "ns", "es", "is" ],
+    "required": [ "ps", "as", "is" ],
     "properties": {
-        "ps": {
-            "type": "array",
-            "items": { "$ref": "#/$defs/player" },
-            "uniqueItems": true,
-            "minItems": 1
-        },
-        "as": {
-            "type": "array",
-            "items": { "$ref": "#/$defs/action" },
-            "uniqueItems": true
-        },
-        "ns": {
-            "type": "array",
-            "items": {
-                "type": "object",
-                "required": [ "n", "p", "a" ],
-                "properties": {
-                    "n": { "$ref": "#/$defs/node" },
-                    "p": { "$ref": "#/$defs/player" },
-                    "a": {
-                        "type": "array",
-                        "items": { "$ref": "#/$defs/action" },
-                        "uniqueItems": true,
-                        "minItems": 1
-                    },
-                    "i": {
-                        "type": "array",
-                        "items": { "$ref": "#/$defs/info_set" },
-                        "uniqueItems": true
-                    },
-                    "l": { "type": "boolean" }
-                },
-                "additionalProperties": false
-            },
-            "uniqueItems": true,
-            "minItems": 1
-        },
-        "es": {
-            "type": "array",
-            "items": {
-                "type": "object",
-                "required": [ "f", "t", "a" ],
-                "properties": {
-                    "f": { "$ref": "#/$defs/node" },
-                    "t": { "$ref": "#/$defs/node" },
-                    "a": { "$ref": "#/$defs/action" }
-                },
-                "additionalProperties": false
-            },
-            "uniqueItems": true
-        },
+        "ps": { "$ref": "#/$defs/string_array" },
+        "as": { "$ref": "#/$defs/string_array" },
         "is": {
             "type": "array",
             "items": {
                 "type": "object",
-                "required": [ "i", "n" ],
+                "required": [ "i", "ns", "p", "a" ],
                 "properties": {
                     "i": { "$ref": "#/$defs/info_set" },
-                    "n": {
+                    "ns": {
                         "type": "array",
                         "items": { "$ref": "#/$defs/node" },
                         "uniqueItems": true,
                         "minItems": 1
                     },
                     "p": { "$ref": "#/$defs/player" },
-                    "a": {
-                        "type": "array",
-                        "items": { "$ref": "#/$defs/action" },
-                        "uniqueItems": true
-                    },
-                    "l": { "type": "boolean" }
+                    "a": { "$ref": "#/$defs/string_array" }
                 },
                 "additionalProperties": false
             },
@@ -109,68 +100,37 @@
             "type": "array",
             "items": {
                 "type": "object",
-                "required": [ "z", "h" ],
+                "required": [ "z", "h", "u" ],
                 "properties": {
                     "z": { "$ref": "#/$defs/id" },
-                    "h": {
-                        "type": "array",
-                        "items": { "$ref": "#/$defs/assignment" },
-                        "uniqueItems": true,
-                        "minItems": 1
-                    },
-                    "p": {
-                        "type": "array",
-                        "items": { "$ref": "#/$defs/info_set" },
-                        "uniqueItems": true
-                    },
-                    "l": { "type": "boolean" },
+                    "h": { "$ref": "#/$defs/history_or_strategy" },
+                    "s": { "$ref": "#/$defs/string_array" },
                     "u": {
                         "type": "array",
                         "items": { "$ref": "#/$defs/payoff" },
-                        "uniqueItems": true
+                        "uniqueItems": true,
+                        "minItems": 1
                     }
                 },
-                "additionalProperties": false,
-                "allOf": [
-                    {
-                        "if": {
-                            "properties": {
-                                "l": { "const": true }
-                            },
-                            "required": [ "l" ]
-                        },
-                        "then": {
-                            "required": [ "u" ],
-                            "properties": { "u": { "minItems": 1 } }
-                        }
-                    }
-                ]
+                "additionalProperties": false
             },
             "uniqueItems": true,
             "minItems": 1
         },
-        "u": {
+        "s": {
             "type": "array",
             "items": {
                 "type": "object",
-                "required": [ "p", "u" ],
                 "properties": {
                     "p": { "$ref": "#/$defs/player" },
-                    "u": {
+                    "s": {
                         "type": "array",
-                        "items": {
-                            "type": "object",
-                            "required": [ "z", "v" ],
-                            "properties": {
-                                "z": { "$ref": "#/$defs/id" },
-                                "v": { "type": "number" }
-                            },
-                            "additionalProperties": false
-                        },
-                        "uniqueItems": true
-                    }
-                },
-                "additionalProperties": false
+                        "items": { "$ref": "#/$defs/history_or_strategy" },
+                        "uniqueItems": true,
+                        "minItems": 1
+                    },
+                    "additionalProperties": false
+                }
             },
             "uniqueItems": true,
             "minItems": 1
@@ -181,14 +141,15 @@
         },
         "h": {
             "type": "object",
-            "required": [ "ps", "ns", "es", "is", "z", "u" ],
+            "required": [ "ps", "ns", "es", "is", "z", "u", "s" ],
             "properties": {
                 "ps": { "type": "string" },
                 "ns": { "type": "string" },
                 "es": { "type": "string" },
                 "is": { "type": "string" },
                 "z": { "type": "string" },
-                "u": { "type": "string" }
+                "u": { "type": "string" },
+                "s": { "type": "string" }
             },
             "additionalProperties": false
         }

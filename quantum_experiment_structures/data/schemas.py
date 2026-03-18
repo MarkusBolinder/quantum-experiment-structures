@@ -119,9 +119,48 @@ SPACETIME_GAME_SCHEMA = {
     "type": "object",
     "$defs": {
         "id": {"type": "string"},
+        "string_array": {
+            "type": "array",
+            "items": {"type": "string"},
+            "uniqueItems": True,
+            "minItems": 1,
+        },
         "player": {"type": "string"},
         "action": {"type": "string"},
-        "node": {"type": "string"},
+        "node": {
+            "type": "object",
+            "required": ["n", "ps", "cn"],
+            "properties": {
+                "n": {"type": "string"},
+                "ps": {  # parents of this node
+                    "type": "array",
+                    "items": {
+                        "type": "object",
+                        "required": ["p", "a"],  # parent and action performed at parent
+                        "properties": {"p": {"type": "string"}, "a": {"type": "string"}},
+                        "additionalProperties": False,
+                    },
+                    "uniqueItems": True,
+                },
+                "cn": {  # children of this node
+                    "type": "array",
+                    "items": {
+                        "type": "object",
+                        "required": ["c", "a"],  # child and action needed to get there
+                        "properties": {"c": {"type": "string"}, "a": {"type": "string"}},
+                        "additionalProperties": False,
+                    },
+                    "uniqueItems": True,
+                },
+            },
+            "additionalProperties": False,
+        },
+        "history_or_strategy": {
+            "type": "array",
+            "items": {"$ref": "#/$defs/assignment"},
+            "uniqueItems": True,
+            "minItems": 1,
+        },
         "info_set": {"type": "string"},
         "assignment": {
             "type": "object",
@@ -136,136 +175,69 @@ SPACETIME_GAME_SCHEMA = {
             "additionalProperties": False,
         },
     },
-    "required": ["ps", "ns", "es", "is"],
+    "required": ["ps", "as", "is"],  # histories and strategies can be inferred
     "properties": {
-        "ps": {
-            "type": "array",
-            "items": {"$ref": "#/$defs/player"},
-            "uniqueItems": True,
-            "minItems": 1,
-        },
-        "as": {"type": "array", "items": {"$ref": "#/$defs/action"}, "uniqueItems": True},
-        "ns": {
+        "ps": {"$ref": "#/$defs/string_array"},  # players
+        "as": {"$ref": "#/$defs/string_array"},  # actions
+        "is": {                                  # information sets
             "type": "array",
             "items": {
                 "type": "object",
-                "required": ["n", "p", "a"],
-                "properties": {
-                    "n": {"$ref": "#/$defs/node"},
-                    "p": {"$ref": "#/$defs/player"},
-                    "a": {
-                        "type": "array",
-                        "items": {"$ref": "#/$defs/action"},
-                        "uniqueItems": True,
-                        "minItems": 1,
-                    },
-                    "i": {
-                        "type": "array",
-                        "items": {"$ref": "#/$defs/info_set"},
-                        "uniqueItems": True,
-                    },
-                    "l": {"type": "boolean"},
-                },
-                "additionalProperties": False,
-            },
-            "uniqueItems": True,
-            "minItems": 1,
-        },
-        "es": {
-            "type": "array",
-            "items": {
-                "type": "object",
-                "required": ["f", "t", "a"],
-                "properties": {
-                    "f": {"$ref": "#/$defs/node"},
-                    "t": {"$ref": "#/$defs/node"},
-                    "a": {"$ref": "#/$defs/action"},
-                },
-                "additionalProperties": False,
-            },
-            "uniqueItems": True,
-        },
-        "is": {
-            "type": "array",
-            "items": {
-                "type": "object",
-                "required": ["i", "n"],
+                # histories and strategies can be inferred from the rest
+                # however, when inferring histories, there is no way to know payoffs,
+                # so they will just be put to zero as placeholders
+                "required": ["i", "ns", "p", "a"],
                 "properties": {
                     "i": {"$ref": "#/$defs/info_set"},
-                    "n": {
+                    "ns": {  # all nodes in this information set
                         "type": "array",
                         "items": {"$ref": "#/$defs/node"},
                         "uniqueItems": True,
                         "minItems": 1,
                     },
-                    "p": {"$ref": "#/$defs/player"},
-                    "a": {
-                        "type": "array",
-                        "items": {"$ref": "#/$defs/action"},
-                        "uniqueItems": True,
-                    },
-                    "l": {"type": "boolean"},
+                    "p": {"$ref": "#/$defs/player"},  # player associated
+                    "a": {"$ref": "#/$defs/string_array"},  # actions playable
                 },
                 "additionalProperties": False,
             },
             "uniqueItems": True,
             "minItems": 1,
         },
-        "z": {
+        "z": {                                   # histories
             "type": "array",
             "items": {
                 "type": "object",
-                "required": ["z", "h"],
+                "required": ["z", "h", "u"],
                 "properties": {
                     "z": {"$ref": "#/$defs/id"},
-                    "h": {
-                        "type": "array",
-                        "items": {"$ref": "#/$defs/assignment"},
-                        "uniqueItems": True,
-                        "minItems": 1,
-                    },
-                    "p": {
-                        "type": "array",
-                        "items": {"$ref": "#/$defs/info_set"},
-                        "uniqueItems": True,
-                    },
-                    "l": {"type": "boolean"},
+                    "h": {"$ref": "#/$defs/history_or_strategy"},
+                    "s": {"$ref": "#/$defs/string_array"},  # the information sets played in history
                     "u": {
                         "type": "array",
                         "items": {"$ref": "#/$defs/payoff"},
                         "uniqueItems": True,
+                        "minItems": 1,
                     },
                 },
                 "additionalProperties": False,
-                "allOf": [
-                    {
-                        "if": {"properties": {"l": {"const": True}}, "required": ["l"]},
-                        "then": {"required": ["u"], "properties": {"u": {"minItems": 1}}},
-                    }
-                ],
             },
             "uniqueItems": True,
             "minItems": 1,
         },
-        "u": {
+        "s": {                                   # strategies
             "type": "array",
             "items": {
                 "type": "object",
-                "required": ["p", "u"],
                 "properties": {
                     "p": {"$ref": "#/$defs/player"},
-                    "u": {
+                    "s": {  # all strategies for this player
                         "type": "array",
-                        "items": {
-                            "type": "object",
-                            "required": ["z", "v"],
-                            "properties": {"z": {"$ref": "#/$defs/id"}, "v": {"type": "number"}},
-                            "additionalProperties": False,
-                        },
+                        "items": {"$ref": "#/$defs/history_or_strategy"},
                         "uniqueItems": True,
+                        "minItems": 1,
                     },
+                    "additionalProperties": False,
                 },
-                "additionalProperties": False,
             },
             "uniqueItems": True,
             "minItems": 1,
@@ -273,7 +245,7 @@ SPACETIME_GAME_SCHEMA = {
         "n": {"type": "array", "items": {"type": "string"}},
         "h": {
             "type": "object",
-            "required": ["ps", "ns", "es", "is", "z", "u"],
+            "required": ["ps", "ns", "es", "is", "z", "u", "s"],
             "properties": {
                 "ps": {"type": "string"},
                 "ns": {"type": "string"},
@@ -281,6 +253,7 @@ SPACETIME_GAME_SCHEMA = {
                 "is": {"type": "string"},
                 "z": {"type": "string"},
                 "u": {"type": "string"},
+                "s": {"type": "string"},
             },
             "additionalProperties": False,
         },
