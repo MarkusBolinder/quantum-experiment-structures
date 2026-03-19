@@ -2,6 +2,7 @@
 
 from collections import defaultdict
 import inspect
+import itertools
 import json
 from pathlib import Path
 
@@ -280,6 +281,77 @@ class CausalContextualityScenario:
         for name, member in inspect.getmembers(self):
             if inspect.ismethod(member) and name.startswith("add"):
                 member()
+
+    def get_causally_secured_cover(self, sort=True):
+        # map measurements to their enabling rules and available outcomes
+        measurements_dict = {m["m"]: m for m in self.data["ms"]}
+        m_names = list(measurements_dict.keys())
+
+        # get all possible outcome assignments (Cartesian product of O_i)
+        # NOTE: this is infeasible for large scenarios/scenarios with many outcomes
+        outcome_spaces = []
+        for name in m_names:
+            outcomes = [o["v"] for o in measurements_dict[name]["o"]]
+            outcome_spaces.append(outcomes)
+
+        valid_contexts = set()
+
+        for assignment_values in itertools.product(*outcome_spaces):
+            # events for this permutation of values
+            assignment = dict(zip(m_names, assignment_values))
+
+            enabled_in_this_world = set()
+            changed = True
+
+            # find all enabled measurements for this permutation of outcomes assigned
+            # a measurement is enabled if at least one of its enabling relations is satisfied
+            # by the outcomes of measurements already in enabled_in_this_world.
+            while changed:
+                changed = False
+                # TODO: store m_names in the same order imposed by the generator to optimize
+                for m_name in m_names:
+                    if m_name in enabled_in_this_world:
+                        continue
+
+                    enabling_conditions = measurements_dict[m_name]["e"]
+
+                    # enabled by empty set, i.e. always enabled
+                    if not enabling_conditions:
+                        enabled_in_this_world.add(m_name)
+                        changed = True
+                        continue
+
+                    # check for one enabled enabling relation
+                    for relation in enabling_conditions:
+                        # a relation is satisfied if all (m, v) in it are in our assignment
+                        # AND those measurements are themselves enabled
+                        satisfied = True
+                        for event in relation:
+                            m, v = event["m"], event["v"]
+                            if m not in enabled_in_this_world or assignment[m] != v:
+                                satisfied = False
+                                break
+
+                        if satisfied:
+                            enabled_in_this_world.add(m_name)
+                            changed = True
+                            break
+
+            if enabled_in_this_world:
+                valid_contexts.add(frozenset(enabled_in_this_world))
+
+        # ensure the cover is an anti-chain (keep maximal elements)
+        cover = []
+        sorted_contexts = sorted(list(valid_contexts), key=len, reverse=True)
+
+        for context in sorted_contexts:
+            if not any(context < other for other in cover):
+                cover.append(context)
+
+        if sort:
+            return sorted(sorted(context) for context in cover)
+
+        return [list(context) for context in cover]
 
     def to_json(self, filename, indent=None):
         """Flush data to a JSON file.
