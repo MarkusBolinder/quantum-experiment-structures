@@ -179,7 +179,7 @@ SPACETIME_GAME_SCHEMA = {
     "properties": {
         "ps": {"$ref": "#/$defs/string_array"},  # players
         "as": {"$ref": "#/$defs/string_array"},  # actions
-        "is": {                                  # information sets
+        "is": {  # information sets
             "type": "array",
             "items": {
                 "type": "object",
@@ -203,7 +203,7 @@ SPACETIME_GAME_SCHEMA = {
             "uniqueItems": True,
             "minItems": 1,
         },
-        "z": {                                   # histories
+        "z": {  # histories
             "type": "array",
             "items": {
                 "type": "object",
@@ -224,7 +224,7 @@ SPACETIME_GAME_SCHEMA = {
             "uniqueItems": True,
             "minItems": 1,
         },
-        "s": {                                   # strategies
+        "s": {  # strategies
             "type": "array",
             "items": {
                 "type": "object",
