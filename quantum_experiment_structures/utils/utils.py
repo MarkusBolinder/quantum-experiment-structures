@@ -40,6 +40,41 @@ def _parse_range(s):
     return int_range
 
 
+def create_anti_chain(contexts):
+    """Prune contexts that are subsets of other contexts to create an anti-chain.
+
+    The definition of a cover, as given by Abramsky and Brandenburger (2011), states that it
+    should be an anti-chain, which means that if c, c' ∈ C and c' ⊆ c then c = c'. The easiest
+    way to ensure this is by only keeping the maximal elements in the cover, which also
+    guarantees that the cover is still covering all measurements.
+
+
+    Args:
+        contexts: a list of sets containing the measurement names.
+
+    Returns:
+        the pruned cover, which will be an anti-chain
+    """
+    n = len(contexts)
+    # interpret subset_matrix[i][j] as the answer to the question "Is c_i a subset of c_j?"
+    subset_matrix = [[False] * n for _ in range(n)]
+    for i, c1 in enumerate(contexts):
+        for j, c2 in enumerate(contexts[i + 1 :], start=i + 1):
+            intersection = c1 & c2
+            if intersection == c1:
+                # c1 is a subset of c2 (=> c2 is not a subset of c1)
+                subset_matrix[i][j] = True
+            elif intersection == c2:
+                # c2 is a subset of c1
+                subset_matrix[j][i] = True
+            # neither is a subset of the other, so do not modify the matrix
+
+    # if row i in subset_matrix has any True, then c_i is a subset of some other context
+    # (the diagonal entries are set to False to avoid counting being a subset of itself)
+    cover = [list(contexts[i]) for i in range(n) if not any(subset_matrix[i])]
+    return cover
+
+
 def extend_with_default(validator_class):
     """Create a validator that populates defaults.
 
