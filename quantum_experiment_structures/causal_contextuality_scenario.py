@@ -397,6 +397,88 @@ class CausalContextualityScenario:
 
         return [list(context) for context in cover]
 
+    # TODO: this will probably flag most scenarios created by CCSGenerator -- how to handle?
+    def check_unique_causal_bridges(self):
+        """Check that the scenario only has unique causal bridges.
+
+        Specifically, check that each measurement only has one enabling relation that can be
+        activated at one time -- meaning that you could have ∅ ⊢ A, {(A,0)} ⊢ B and {(A,1)} ⊢ B,
+        because A cannot give both outcomes 0 and 1 in one experiment. However, ∅ ⊢ A, ∅ ⊢ B,
+        {(A,0)} ⊢ C and {(B,0)} ⊢ C would be an example of a non-unique causal bridge.
+
+        This is true if every pair of enabling relations for a given measurement contains at least
+        one contradictory outcome for a common parent measurement.
+        """
+        for measurement in self.data["ms"]:
+            enabling_relations = measurement["e"]
+
+            # trivially unique
+            if len(enabling_relations) <= 1:
+                continue
+
+            # compare every pair of enabling relations for this measurement
+            for i, rel1 in enumerate(enabling_relations):
+                for j, rel2 in enumerate(enabling_relations[i + 1 :], start=i + 1):
+                    # empty set enablings conflict with everything
+                    if not rel1 or not rel2:
+                        return False
+
+                    found_contradiction = False
+                    rel2_map = {event["m"]: event["v"] for event in rel2}
+
+                    for event in rel1:
+                        m_parent, v_parent = event["m"], event["v"]
+                        if m_parent in rel2_map and v_parent != rel2_map[m_parent]:
+                            found_contradiction = True
+                            break
+
+                    # if the enabling relations do not conflict, we have a non-unique causal bridge
+                    if not found_contradiction:
+                        return False
+
+        return True
+
+    def check_no_cycles(self):
+        """Make sure that there are no cycles in the enabling relations of the scenario.
+
+        That is, we can linearize the measurements in some order. If X is enabled by Y,
+        then Y cannot enable X. Cycles are detected using DFS.
+        """
+        # adjacency relations
+        adj = defaultdict(set)
+        for measurement in self.data["ms"]:
+            child = measurement["m"]
+            for relation in measurement["e"]:
+                for event in relation:
+                    parent = event["m"]
+                    adj[parent].add(child)
+
+        # all nodes we have been to
+        visited = set()
+        # all nodes in the current dfs path
+        recursion_stack = set()
+
+        def has_cycle(u):
+            visited.add(u)
+            recursion_stack.add(u)
+
+            for v in adj[u]:
+                if v not in visited:
+                    if has_cycle(v):
+                        return True
+                elif v in recursion_stack:
+                    return True
+
+            recursion_stack.remove(u)
+            return False
+
+        for node in adj:
+            if node not in visited:
+                if has_cycle(node):
+                    return False
+
+        return True
+
     def to_json(self, filename, indent=None):
         """Flush data to a JSON file.
 
