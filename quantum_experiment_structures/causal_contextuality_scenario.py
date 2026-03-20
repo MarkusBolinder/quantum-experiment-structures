@@ -283,52 +283,57 @@ class CausalContextualityScenario:
                 member()
 
     def get_causally_secured_cover(self, sort=True):
-        # map measurements to their enabling rules and available outcomes
+        # map measurements to their data
         measurements_dict = {m["m"]: m for m in self.data["ms"]}
         m_names = list(measurements_dict.keys())
+        all_measurements_fs = frozenset(m_names)
 
-        # get all possible outcome assignments (Cartesian product of O_i)
-        # NOTE: this is infeasible for large scenarios/scenarios with many outcomes
-        outcome_spaces = []
-        for name in m_names:
-            outcomes = [o["v"] for o in measurements_dict[name]["o"]]
-            outcome_spaces.append(outcomes)
+        # determine which outcomes occur in enabling relations
+        # significantly reduces the branching factor
+        enabling_outcomes = {name: set() for name in m_names}
+        for measurement in self.data["ms"]:
+            for relation in measurement["e"]:
+                for event in relation:
+                    if event["m"] in enabling_outcomes:
+                        enabling_outcomes[event["m"]].add(event["v"])
 
         valid_contexts = set()
+        visited_assignments = set()
+        found_full_set = False
 
-        for assignment_values in itertools.product(*outcome_spaces):
-            # events for this permutation of values
-            assignment = dict(zip(m_names, assignment_values))
+        def backtrack(current_assignment):
+            nonlocal found_full_set
+            if found_full_set:
+                return
+
+            # dp caching
+            state = frozenset(current_assignment.items())
+            if state in visited_assignments:
+                return
+            visited_assignments.add(state)
 
             enabled_in_this_world = set()
             changed = True
-
-            # find all enabled measurements for this permutation of outcomes assigned
-            # a measurement is enabled if at least one of its enabling relations is satisfied
-            # by the outcomes of measurements already in enabled_in_this_world.
             while changed:
                 changed = False
-                # TODO: store m_names in the same order imposed by the generator to optimize
                 for m_name in m_names:
                     if m_name in enabled_in_this_world:
                         continue
 
                     enabling_conditions = measurements_dict[m_name]["e"]
 
-                    # enabled by empty set, i.e. always enabled
                     if not enabling_conditions:
                         enabled_in_this_world.add(m_name)
                         changed = True
                         continue
 
-                    # check for one enabled enabling relation
                     for relation in enabling_conditions:
-                        # a relation is satisfied if all (m, v) in it are in our assignment
-                        # AND those measurements are themselves enabled
                         satisfied = True
                         for event in relation:
                             m, v = event["m"], event["v"]
-                            if m not in enabled_in_this_world or assignment[m] != v:
+                            # a relation is satisfied if all (m, v) in it are in our assignment
+                            # AND those measurements are themselves enabled
+                            if m not in enabled_in_this_world or current_assignment.get(m) != v:
                                 satisfied = False
                                 break
 
@@ -338,18 +343,57 @@ class CausalContextualityScenario:
                             break
 
             if enabled_in_this_world:
-                valid_contexts.add(frozenset(enabled_in_this_world))
+                fs = frozenset(enabled_in_this_world)
+                valid_contexts.add(fs)
+                # no need to keep recursing
+                if fs == all_measurements_fs:
+                    found_full_set = True
+                    return
+
+            # identify enabled measurements without assigned outcomes
+            to_assign = [m for m in enabling_outcomes if m not in current_assignment]
+            if not to_assign:
+                return
+
+            # take the first unassigned measurement as the next one
+            next_m = to_assign[0]
+            all_values = [o["v"] for o in measurements_dict[next_m]["o"]]
+
+            # determine which outcomes are worth testing
+            outcomes_to_try = set()
+            for v in enabling_outcomes[next_m]:
+                if v in all_values:
+                    outcomes_to_try.add(v)
+
+            # add an outcome that is not represented to cover the case when the measurement is not
+            # present in the context, if such a case exists
+            for v in all_values:
+                if v not in enabling_outcomes[next_m]:
+                    outcomes_to_try.add(v)
+                    break
+
+            for val in outcomes_to_try:
+                current_assignment[next_m] = val
+                backtrack(current_assignment)
+                if found_full_set:
+                    return
+                del current_assignment[next_m]
+
+        # start recursion
+        backtrack(dict())
 
         # ensure the cover is an anti-chain (keep maximal elements)
         cover = []
-        sorted_contexts = sorted(list(valid_contexts), key=len, reverse=True)
-
-        for context in sorted_contexts:
-            if not any(context < other for other in cover):
-                cover.append(context)
+        if found_full_set:
+            cover = [all_measurements_fs]
+        else:
+            sorted_contexts = sorted(list(valid_contexts), key=len, reverse=True)
+            for context in sorted_contexts:
+                if not any(context < other for other in cover):
+                    cover.append(context)
 
         if sort:
-            return sorted(sorted(context) for context in cover)
+            return sorted(sorted(list(context)) for context in cover)
 
         return [list(context) for context in cover]
 
