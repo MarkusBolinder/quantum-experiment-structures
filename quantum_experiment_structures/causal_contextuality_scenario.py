@@ -2,7 +2,6 @@
 
 from collections import defaultdict
 import inspect
-import itertools
 import json
 from pathlib import Path
 
