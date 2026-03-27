@@ -13,7 +13,7 @@
         "action": { "type": "string" },
         "node": {
             "type": "object",
-            "required": [ "n", "ps", "cn" ],
+            "required": [ "n", "ps" ],
             "properties": {
                 "n": { "type": "string" },
                 "ps": {
@@ -23,19 +23,6 @@
                         "required": [ "p", "a" ],
                         "properties": {
                             "p": { "type": "string" },
-                            "a": { "type": "string" }
-                        },
-                        "additionalProperties": false
-                    },
-                    "uniqueItems": true
-                },
-                "cn": {
-                    "type": "array",
-                    "items": {
-                        "type": "object",
-                        "required": [ "c", "a" ],
-                        "properties": {
-                            "c": { "type": "string" },
                             "a": { "type": "string" }
                         },
                         "additionalProperties": false
@@ -121,6 +108,7 @@
             "type": "array",
             "items": {
                 "type": "object",
+                "required": ["p", "s"],
                 "properties": {
                     "p": { "$ref": "#/$defs/player" },
                     "s": {
@@ -141,11 +129,12 @@
         },
         "h": {
             "type": "object",
-            "required": [ "ps", "ns", "es", "is", "z", "u", "s" ],
+            "required": [ "ns", "es", "ps", "as", "is", "z", "u", "s" ],
             "properties": {
-                "ps": { "type": "string" },
                 "ns": { "type": "string" },
                 "es": { "type": "string" },
+                "ps": { "type": "string" },
+                "as": { "type": "string" },
                 "is": { "type": "string" },
                 "z": { "type": "string" },
                 "u": { "type": "string" },

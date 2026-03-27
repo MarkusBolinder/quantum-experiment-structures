@@ -129,7 +129,7 @@ SPACETIME_GAME_SCHEMA = {
         "action": {"type": "string"},
         "node": {
             "type": "object",
-            "required": ["n", "ps", "cn"],
+            "required": ["n", "ps"],
             "properties": {
                 "n": {"type": "string"},
                 "ps": {  # parents of this node
@@ -138,16 +138,6 @@ SPACETIME_GAME_SCHEMA = {
                         "type": "object",
                         "required": ["p", "a"],  # parent and action performed at parent
                         "properties": {"p": {"type": "string"}, "a": {"type": "string"}},
-                        "additionalProperties": False,
-                    },
-                    "uniqueItems": True,
-                },
-                "cn": {  # children of this node
-                    "type": "array",
-                    "items": {
-                        "type": "object",
-                        "required": ["c", "a"],  # child and action needed to get there
-                        "properties": {"c": {"type": "string"}, "a": {"type": "string"}},
                         "additionalProperties": False,
                     },
                     "uniqueItems": True,
@@ -228,6 +218,7 @@ SPACETIME_GAME_SCHEMA = {
             "type": "array",
             "items": {
                 "type": "object",
+                "required": ["p", "s"],
                 "properties": {
                     "p": {"$ref": "#/$defs/player"},
                     "s": {  # all strategies for this player
@@ -245,15 +236,16 @@ SPACETIME_GAME_SCHEMA = {
         "n": {"type": "array", "items": {"type": "string"}},
         "h": {
             "type": "object",
-            "required": ["ps", "ns", "es", "is", "z", "u", "s"],
+            "required": ["ns", "es", "ps", "as", "is", "z", "u", "s"],
             "properties": {
-                "ps": {"type": "string"},
-                "ns": {"type": "string"},
-                "es": {"type": "string"},
-                "is": {"type": "string"},
-                "z": {"type": "string"},
-                "u": {"type": "string"},
-                "s": {"type": "string"},
+                "ns": {"type": "string"},  # nodes
+                "es": {"type": "string"},  # edges
+                "ps": {"type": "string"},  # players
+                "as": {"type": "string"},  # actions
+                "is": {"type": "string"},  # information sets
+                "z": {"type": "string"},  # histories
+                "u": {"type": "string"},  # utility
+                "s": {"type": "string"},  # strategies
             },
             "additionalProperties": False,
         },
