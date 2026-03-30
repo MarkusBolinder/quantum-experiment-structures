@@ -596,6 +596,29 @@ class CausalContextualityScenario:
             ValueError: If the scenario violates the unique causal bridge
                 assumption, if a local cover restriction is empty, or if the
                 conversion encounters an inconsistent causal structure.
+
+        Naming convention of nodes:
+            Bob node ids
+                The base form is:
+                    B:{} for the root Bob node
+                    B:{Y=0} for a Bob node whose enabling bridge is Y=0
+                If the same bridge must be split into several distinct nodes,
+                the implementation appends witness information (which Alfred node enabled it):
+                    B:{Y=0}|A:B:{}:Y:{X,Y}@0;A:B:{}:Y:{Y,Z}@0
+                That means:
+                    the node is a Bob node, its enabling bridge is {Y=0},
+                    it is witnessed by those exact Alfred-parent/action pairs
+            Alfred node ids
+                The form is:
+                    A:<bob-node-id>:<measurement>:<context>
+                Example:
+                    A:B:{}:X:{X,Y}
+                This means:
+                    Alfred node reached from Bob root B:{} measurement X local context {X,Y}
+
+        Information set ids
+            Bob:<node-id> for Bob singleton sets
+            Alfred:<measurement> for Alfred measurement sets
         """
         # parse enabling relations and outcomes
         enabling_of = dict()
