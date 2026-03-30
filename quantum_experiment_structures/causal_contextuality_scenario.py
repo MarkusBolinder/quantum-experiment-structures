@@ -1,7 +1,8 @@
 """Validate a JSON representation of a CCS using both a schema and additional consistency checks."""
 
-from collections import defaultdict
+from collections import defaultdict, deque
 import inspect
+import itertools
 import json
 from pathlib import Path
 
@@ -10,20 +11,38 @@ import jsonschema
 
 
 class CausalContextualityScenario:
-    """Python representation of a causal contextuality scenario.
+    """Represents a causal contextuality scenario and converts it to a game.
+
+    A causal contextuality scenario consists of a family of measurements, each
+    with a finite set of outcomes and optional enabling relations, together
+    with a global cover of compatible measurement contexts.
 
     In addition to just representing the data, a number of methods are supplied which can be
     leveraged to ensure validity and/or calculate properties of the CCS.
+
+    A method converting the CCS to a spacetime game also exists. Note that this requires the
+    scenario to have unique causal bridges and a causally secured cover.
     """
 
     def __init__(self, json_data):
-        """Read, validate and initialize an instance of a causal causal contextuality scenario.
+        """Initialize a causal contextuality scenario from JSON-like data.
 
         Args:
-            json_data: a dict-object representing well-formed JSON.
+            json_data: A dictionary containing the scenario description. The
+                dictionary is expected to contain (there are some optional fields too):
+                - "ms": a list of measurements, where each measurement has:
+                    - "m": the measurement name
+                    - "e": a list of enabling sets
+                    - "o": a list of outcomes
+                - "c": a list of contexts forming the global cover
+
+        Attributes:
+            data: The raw input dictionary.
+            measurements: A mapping from measurement name to its measurement record.
+            cover: A set of frozensets, each representing a context in the global cover.
         """
         self.data = json_data
-        self.measurements = set(measurement["m"] for measurement in self.data["ms"])
+        self.measurements = {measurement["m"]: measurement for measurement in self.data["ms"]}
         self.cover = set(frozenset(context) for context in self.data["c"])
 
     def __repr__(self):
@@ -177,7 +196,7 @@ class CausalContextualityScenario:
             measurement for context in self.data["c"] for measurement in context
         )
         # this also returns False if the contexts contain measurements that are not in the scenario
-        return measurements_in_contexts == self.measurements
+        return measurements_in_contexts == set(self.measurements)
 
     def check_unique_values(self):
         """Ensure that there are no duplicates in the values of any measurement's outcomes.
@@ -482,6 +501,334 @@ class CausalContextualityScenario:
                     return False
 
         return True
+
+    @staticmethod
+    def _dedupe_preserve_order(items):
+        """Remove duplicates while preserving the original order.
+
+        Args:
+            items: An iterable of hashable items.
+
+        Returns:
+            A list containing the unique items from `items`, in their first
+            observed order.
+        """
+        seen = set()
+        result = []
+        for item in items:
+            if item not in seen:
+                seen.add(item)
+                result.append(item)
+        return result
+
+    @staticmethod
+    def _value_label(value):
+        """Convert an outcome value into a schema-safe string label.
+
+        Args:
+            value: An outcome value. This may be a dictionary such as
+                {'v': 0}, a string, or another JSON-serializable value.
+
+        Returns:
+            A string label suitable for use as an action label in the game
+            schema.
+        """
+        if isinstance(value, dict) and set(value.keys()) == {"v"}:
+            value = value["v"]
+
+        if isinstance(value, str):
+            return value
+
+        # Stable, JSON-safe fallback for non-string outcomes.
+        return json.dumps(value, sort_keys=True, separators=(",", ":"))
+
+    @staticmethod
+    def _context_label(context):
+        """Format a context as a readable string label.
+
+        Args:
+            context: A frozenset of measurement names.
+
+        Returns:
+            A string of the form '{}', or '{X,Y,Z}' with sorted names.
+        """
+        if not context:
+            return "{}"
+        return "{" + ",".join(sorted(context)) + "}"
+
+    @classmethod
+    def _bridge_label(cls, bridge):
+        """Format an enabling bridge as a readable string label.
+
+        Args:
+            bridge: A frozenset of (measurement, outcome) pairs.
+
+        Returns:
+            A string of the form '{}', or '{X=0,Y=1}' with sorted entries.
+        """
+        if not bridge:
+            return "{}"
+        return "{" + ",".join(f"{m}={v}" for m, v in sorted(bridge)) + "}"
+
+    def to_spacetime_game(self):
+        """Convert the scenario into a spacetime game dictionary.
+
+        The conversion constructs a game with two players:
+        Bob, who has perfect information, and Alfred, who may have imperfect
+        information.
+
+        The conversion is done according to the following plan:
+
+        1. Compute the local cover restriction at each enabling set by
+           intersecting the global cover with the enabled measurements.
+        2. Build Bob nodes for enabling histories and Alfred nodes for
+           measurement/context pairs reachable from those Bob nodes.
+        3. Group nodes into information sets:
+           - Bob information sets are singletons.
+           - Alfred information sets contain all nodes for the same
+             measurement.
+
+        Returns:
+            A dictionary representing the spacetime game. The returned value is
+            intended to be valid against the spacetime game JSON schema.
+
+        Raises:
+            ValueError: If the scenario violates the unique causal bridge
+                assumption, if a local cover restriction is empty, or if the
+                conversion encounters an inconsistent causal structure.
+        """
+        # parse enabling relations and outcomes
+        enabling_of = dict()
+        enabled_by = defaultdict(list)
+        outcomes_by_measurement = dict()
+
+        for name, measurement in self.measurements.items():
+            outcomes_by_measurement[name] = [
+                self._value_label(outcome["v"]) for outcome in measurement["o"]
+            ]
+
+            enabling_relations = measurement["e"]
+            if len(enabling_relations) > 1:
+                raise ValueError(
+                    f"Multiple enabling relations for {name}; unique causal bridges are required."
+                )
+
+            if enabling_relations:
+                bridge = frozenset(
+                    (event["m"], self._value_label(event["v"])) for event in enabling_relations[0]
+                )
+            else:
+                bridge = frozenset()
+
+            # bridge is the unique causal bridge for this measurement
+            enabling_of[name] = bridge
+            enabled_by[bridge].append(name)
+
+        # compute local cover restrictions C_t = {C' ∩ enabled(t) | C' in C} \ {∅}
+        local_cover = dict()
+        for bridge, enabled_measurements in enabled_by.items():
+            enabled_set = set(enabled_measurements)
+            restriction = {
+                frozenset(context & enabled_set) for context in self.cover if context & enabled_set
+            }
+            if not restriction:
+                raise ValueError(
+                    f"Empty local cover at enabling set {sorted(bridge)}; incompatible scenario."
+                )
+            local_cover[bridge] = restriction
+
+        root = frozenset()
+        if root not in local_cover:
+            raise ValueError("No root local cover found for the empty enabling set.")
+
+        # created nodes
+        bob_nodes = []
+        alfred_nodes = []
+
+        # store signatures of nodes for caching
+        bob_sig_seen = set()
+        alfred_sig_seen = set()
+
+        # Alfred nodes grouped by measurement
+        alfred_by_measurement = defaultdict(list)
+
+        # queue of Bob node ids to expand into Alfred nodes
+        bob_queue = deque()
+
+        def add_bob_node(bridge, parents):
+            """Create a Bob node instance keyed by bridge + exact parent witness set."""
+            parent_entries = tuple(sorted(tuple(p.values()) for p in parents))
+            sig = (tuple(sorted(bridge)), parent_entries)
+            if sig in bob_sig_seen:
+                return None
+
+            bob_sig_seen.add(sig)
+            bridge_label = self._bridge_label(bridge)
+
+            if not parent_entries:
+                node_id = f"B:{bridge_label}"
+            else:
+                parent_part = ";".join(f"{pid}@{action}" for pid, action in parent_entries)
+                node_id = f"B:{bridge_label}|{parent_part}"
+
+            node = {
+                "n": node_id,
+                "ps": [{"p": pid, "a": action} for pid, action in parent_entries],
+            }
+            bob_nodes.append(node)
+            bob_queue.append(node_id)
+            return node
+
+        def add_alfred_node(bob_node_id, measurement, context):
+            """Create an Alfred node for a particular Bob node, measurement, and context."""
+            context_label = self._context_label(context)
+            sig = (bob_node_id, measurement, context_label)
+            if sig in alfred_sig_seen:
+                return None
+
+            alfred_sig_seen.add(sig)
+            node_id = f"A:{bob_node_id}:{measurement}:{context_label}"
+            node = {
+                "n": node_id,
+                "ps": [{"p": bob_node_id, "a": context_label}],
+            }
+            alfred_nodes.append(node)
+            alfred_by_measurement[measurement].append(node)
+            return node
+
+        def _get_bridge(node_id):
+            """Find the causal bridge for the given Bob node."""
+            bridge = None
+            if node_id == f"B:{self._bridge_label(root)}":
+                bridge = root
+            else:
+                # recover bridge from the node id prefix
+                prefix = node_id.split("|", 1)[0]
+                bridge_text = prefix[2:]  # strip 'B:'
+                if bridge_text == "{}":
+                    # root
+                    bridge = frozenset()
+                else:
+                    parsed = set()
+                    bridge_items = bridge_text.strip("{}")
+                    if bridge_items:
+                        for part in bridge_items.split(","):
+                            m, v = part.split("=")
+                            parsed.add((m, v))
+                    bridge = frozenset(parsed)
+            return bridge
+
+        # root node
+        add_bob_node(root, [])
+
+        processed_bob = set()
+
+        def expand_bob_nodes():
+            """Expand all queued Bob nodes into Alfred nodes."""
+            while bob_queue:
+                current_id = bob_queue.popleft()
+                if current_id in processed_bob:
+                    continue
+                processed_bob.add(current_id)
+
+                current_bridge = _get_bridge(current_id)
+
+                for context in local_cover[current_bridge]:
+                    for measurement in sorted(context):
+                        add_alfred_node(current_id, measurement, context)
+
+        def try_create_bob_nodes():
+            """Create all Bob nodes whose enabling bridges are currently witnessable."""
+            created_any = False
+
+            for measurement in enabling_of:
+                bridge = enabling_of[measurement]
+                if not bridge:
+                    continue  # root already handles empty enabling set
+
+                antecedents = bridge  # [(m, v), ...]
+                candidate_lists = []
+                possible = True
+
+                for ant_measurement, _ in antecedents:
+                    candidates = alfred_by_measurement.get(ant_measurement, [])
+                    if not candidates:
+                        possible = False
+                        break
+                    candidate_lists.append(candidates)
+
+                if not possible:
+                    continue
+
+                for combo in itertools.product(*candidate_lists):
+                    parents = []
+                    for alfred_node, (_, ant_value) in zip(combo, antecedents):
+                        parents.append({"p": alfred_node["n"], "a": ant_value})
+
+                    parent_entries = tuple(sorted(tuple(p.values()) for p in parents))
+                    sig = (tuple(sorted(bridge)), parent_entries)
+                    if sig in bob_sig_seen:
+                        continue
+
+                    add_bob_node(bridge, parents)
+                    created_any = True
+
+            return created_any
+
+        # build the game until we reach a fixpoint
+        while bob_queue:
+            expand_bob_nodes()
+            # new Alfred nodes may enable more nodes for Bob
+            while try_create_bob_nodes():
+                expand_bob_nodes()
+
+        info_sets = []
+
+        # Bob: singleton information sets
+        for bob_node in bob_nodes:
+            node_id = bob_node["n"]
+            bridge = _get_bridge(node_id)
+
+            actions = [self._context_label(c) for c in local_cover[bridge]]
+            info_sets.append(
+                {
+                    "i": f"Bob:{node_id}",
+                    "ns": [bob_node],
+                    "p": "Bob",
+                    "a": self._dedupe_preserve_order(actions),
+                }
+            )
+
+        # Alfred: one information set per measurement
+        for measurement, nodes in alfred_by_measurement.items():
+            info_sets.append(
+                {
+                    "i": f"Alfred:{measurement}",
+                    "ns": nodes,
+                    "p": "Alfred",
+                    "a": self._dedupe_preserve_order(outcomes_by_measurement[measurement]),
+                }
+            )
+
+        # global action array
+        actions = set()
+
+        # Bob actions
+        for bob_node in bob_nodes:
+            node_id = bob_node["n"]
+            bridge = _get_bridge(node_id)
+
+            actions.update(self._context_label(c) for c in local_cover[bridge])
+
+        # Alfred actions
+        for measurement, labels in outcomes_by_measurement.items():
+            actions.update(labels)
+
+        return {
+            "ps": ["Bob", "Alfred"],
+            "as": actions,
+            "is": info_sets,
+        }
 
     def to_json(self, filename, indent=None):
         """Flush data to a JSON file.
