@@ -849,7 +849,7 @@ class CausalContextualityScenario:
 
         return {
             "ps": ["Bob", "Alfred"],
-            "as": actions,
+            "as": list(actions),
             "is": info_sets,
         }
 
