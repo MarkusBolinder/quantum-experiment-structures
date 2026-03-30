@@ -36,8 +36,8 @@ class CausalContextualityScenario:
         try:
             jsonschema.validate(self.data, schema=CCS_SCHEMA)
             return True
-        except Exception as e:
-            print(e)
+        except jsonschema.ValidationError as e:
+            print(f"Validation error: {e}")
             return False
 
     def check_consistency(self):
@@ -301,6 +301,11 @@ class CausalContextualityScenario:
         found_full_set = False
 
         def backtrack(current_assignment):
+            # TODO: introduce another for-loop or something inside here to get all the things
+            # without recursing, as it is deterministic
+            # TODO: change it so that we generate a random local cover for a RHS of the enabling
+            # relaions + transient closure and then we construct the causally secured cover based on
+            # this randomly generated local cover
             nonlocal found_full_set
             if found_full_set:
                 return
@@ -444,7 +449,7 @@ class CausalContextualityScenario:
         then Y cannot enable X. Cycles are detected using DFS.
         """
         # adjacency relations
-        adj = defaultdict(set)
+        adj = {measurement: set() for measurement in self.measurements}
         for measurement in self.data["ms"]:
             child = measurement["m"]
             for relation in measurement["e"]:
