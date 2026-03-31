@@ -25,10 +25,10 @@ Example usage:
         from quantum_experiment_structures.generator import CCSGenerator
 
         kwargs = {
-            "n_measurements_range": (4, 6),
-            "n_values_range": 2,
-            "n_contexts_range": (3, 5),
-            "context_size_range": (2, 3),
+            "n_measurements_range": [4, 6],
+            "n_values_range": [2, 2]  # all measurements will have two outcomes
+            "n_contexts_range": [3, 5],
+            "context_size_range": [2, 3],
             "n_scenarios": 5,
             "seed": 42,
         }
