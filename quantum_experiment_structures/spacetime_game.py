@@ -1,6 +1,6 @@
 """Python representation of a spacetime game."""
 
-from collections import Counter
+from collections import Counter, defaultdict
 import inspect
 import itertools
 import json
@@ -49,6 +49,15 @@ class SpacetimeGame:
                     "info_set_id": iset["i"],
                     "player": iset["p"],
                 }
+
+        # build adjacency structure for forward traversal (parents -> children)
+        # NOTE: this will add create adjacency lists for parents that are not listed as nodes,
+        # but this will be checked by one of the checking methods anyway, so it should be fine
+        self.adj = defaultdict(list)
+        for node_name, info in self.nodes.items():
+            for p in info["node_data"]["ps"]:
+                parent, action = p.values()
+                self.adj[parent].append({"c": node_name, "a": action})
 
     def __repr__(self):
         """Return a string representation of the spacetime game."""
@@ -141,9 +150,7 @@ class SpacetimeGame:
             visited.add(node)
             stack.add(node)
 
-            # FIXME: rewrite with parents
-            node_data = self.nodes[node]["node_data"]
-            for child in node_data["cn"]:
+            for child in self.adj[node]:
                 child_name = child["c"]
                 if child_name not in visited:
                     if has_cycle(child_name):
@@ -302,6 +309,9 @@ class SpacetimeGame:
         adds the history to the data if it is not already present -- this is based on the
         information set and action tuples that define a history.
         """
+        # FIXME: these does not seem to produce correct histories when there are enabling relations
+        # with more than one event, e.g. with {(X,0),(Z,0)} enables T, then the histories that
+        # contain T, only contain one of X or Z, not both.
         if "z" not in self.data:
             self.data["z"] = []
 
@@ -314,15 +324,12 @@ class SpacetimeGame:
         found = []
 
         # dfs over the dag to find all paths
-        # FIXME: rewrite this code to use parents instead -- as children have been murdered
-        # Probably a good idea to create an adjancency structure in __init__ with all the DAG
-        # relations and pointers to children and parents and whatever.
         def find_paths(node_name, current_h):
             info = self.nodes[node_name]
             iset_id = info["info_set_id"]
             for action in self.info_sets[iset_id]["a"]:
                 new_h = current_h + [{"i": iset_id, "a": action}]
-                children = [c["c"] for c in info["node_data"]["cn"] if c["a"] == action]
+                children = [c["c"] for c in self.adj[node_name] if c["a"] == action]
                 if not children:
                     # found a leaf in the tree: append the history that got here
                     found.append(new_h)
@@ -356,6 +363,7 @@ class SpacetimeGame:
         strategies, but instead assigns actions to all information sets -- even though they may not
         be played/reached in the spacetime game given the previous actions taken.
         """
+        # TODO: check that this method produces correct results
         if "s" not in self.data:
             self.data["s"] = []
 
@@ -407,10 +415,8 @@ class SpacetimeGame:
         # 3. R and σ: edges and edge action labeling
         # σ(N,M) represents the action label on the directed edge from N to M
         sigma_labels = []
-        # FIXME: rewrite with parents
         for node_name in all_node_names:
-            node_data = self.nodes[node_name]["node_data"]
-            for child in node_data["cn"]:
+            for child in self.adj[node_name]:
                 sigma_labels.append(f"σ({node_name}, {child["c"]}) = {child["a"]}")
         es_representation = ", ".join(sigma_labels) if sigma_labels else "∅"
 
@@ -499,6 +505,8 @@ class SpacetimeGame:
         if not self.validate():
             raise jsonschema.ValidationError("The data is not valid against the schema.")
         # then add missing fields
+        # FIXME: if histories/strategies get added after the add_human_readable method is called,
+        # then they will not be properly added to the human readable object
         self.all_adds()
         # then check that everything is correct
         self.all_checks()
