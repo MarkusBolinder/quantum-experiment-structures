@@ -319,40 +319,6 @@ class CCSGenerator:
                         # TODO: could just return here probably
                         break
 
-    def _handle_output(self):
-        """Flush generated scenarios in memory to disk in batches according to self.batch_size.
-
-        When self.output_dir is set, this method iterates over self.scenarios and writes them to
-        files organized in batches. For each scenario the appropriate flush method is chosen:
-            - If batch_size > 1, uses ccs.append_to_json_lines(path) to append scenario(s) to a JSON
-              Lines file for the current batch (so multiple scenarios share the same .jsonl file).
-            - If batch_size == 1, uses ccs.to_json(path) to write a single JSON file per scenario.
-
-        File naming:
-            - Files are named with a prefix 'part_' and a zero-padded batch index; the padding width
-              is derived from self.n_file_magnitude computed at initialization.
-        """
-        i = 0
-        json_lines = self.batch_size > 1
-        if json_lines:
-            while i < len(self.scenarios):
-                path = (
-                    Path(self.output_dir)
-                    / f"part_{self._batch_number:0{self.n_file_magnitude}}.jsonl"
-                )
-                with path.open("a") as f:
-                    while i < self.batch_size and i < len(self.scenarios):
-                        ccs = self.scenarios[i]
-                        json.dump(ccs.data, f)
-                        f.write("\n")
-                        i += 1
-                self._batch_number += 1
-        else:
-            for ccs in self.scenarios:
-                path = Path(self.output_dir) / f"part_{self._batch_number:0{self.n_file_magnitude}}"
-                ccs.to_json(path)
-                self._batch_number += 1
-
     def _generate_measurement_names(self, n):
         """Create an ordered of measurement names of length n following a spreadsheet-like scheme.
 
