@@ -167,9 +167,69 @@ class SpacetimeGame:
                     raise ValueError(f"Cycle detected in node graph involving node '{node}'.")
         return True
 
-    # TODO: check that if a measurement is present in the history, then all its enabling
-    # measurements should be present and the converse, that if a group of measurements that enable
-    # something is present, then the something is also present (totality).
+    def check_totality_and_cototality(self):
+        """Check that totality and co-totality holds for all histories.
+
+        Totality means that every measurement accessible from the current causal history must be
+        assigned an outcome. Co-totality is the inverse of this: if a measurement is assigned an
+        outcome in a history, then all the measurements in its causal support must also be assigned
+        an outcome in the same history.
+
+        Raises:
+            ValueError if any history does not satisfy the totality and co-totality conditions.
+        """
+        for history in self.data.get("z", []):
+            assignments = history["h"]
+            context_label = f"history '{history['z']}'"
+            # map information set ids to the chosen actions in this specific set
+            mapping = {a["i"]: a["a"] for a in assignments}
+            active_isets = set(mapping.keys())
+
+            # 1) co-totality: if a measurement is present, it must be enabled by its causal past
+            for iset_id in active_isets:
+                # information set is supported if at least one of its nodes has all parents
+                # satisfied by the current history/strategy assignments.
+                is_supported = False
+                for node_entry in self.info_sets[iset_id]["ns"]:
+                    node_name = node_entry["n"]
+                    parents = self.nodes[node_name]["node_data"]["ps"]
+
+                    # all([]) is True => root nodes are enabled
+                    if all(
+                        p["p"] in self.nodes
+                        and self.nodes[p["p"]]["info_set_id"] in mapping
+                        and mapping[self.nodes[p["p"]]["info_set_id"]] == p["a"]
+                        for p in parents
+                    ):
+                        is_supported = True
+                        break
+
+                if not is_supported:
+                    raise ValueError(
+                        f"Co-totality violation in {context_label}: information set '{iset_id}' "
+                        "is present, but none of its nodes are enabled by the causal past "
+                        "defined in the assignments."
+                    )
+
+            # 2) totality: if a measurement is enabled by the current history, it must be present
+            for node_name, info in self.nodes.items():
+                parents = info["node_data"]["ps"]
+
+                # check if this specific node is enabled by the assignments
+                if all(
+                    p["p"] in self.nodes
+                    and self.nodes[p["p"]]["info_set_id"] in mapping
+                    and mapping[self.nodes[p["p"]]["info_set_id"]] == p["a"]
+                    for p in parents
+                ):
+                    target_iset = info["info_set_id"]
+                    if target_iset not in active_isets:
+                        raise ValueError(
+                            f"Totality violation in {context_label}: measurement '{target_iset}' "
+                            f"(node '{node_name}') is enabled but has no assigned outcome."
+                        )
+        return True
+
     def check_histories_consistency(self):
         """Verify that assignments and utilities in histories reference valid entities.
 
@@ -180,7 +240,7 @@ class SpacetimeGame:
         Raises:
             ValueError: If history logic is broken or players are missing from payoffs.
         """
-        # TODO: check totality of histories too.
+        # TODO: check that all possible histories are included
         for history in self.data.get("z", []):
             # check that actions are playable in the information set
             info_set_counter = Counter()
@@ -234,7 +294,7 @@ class SpacetimeGame:
         Raises:
             ValueError: If strategy/player mismatch or duplicate strategies found.
         """
-        # TODO: check totality of strategies too. I.e. that all possible strategies are included.
+        # TODO: check that all possible strategies are included
         for strategy_group in self.data.get("s", []):
             player = strategy_group["p"]
             if player not in self.players:
@@ -308,55 +368,83 @@ class SpacetimeGame:
     def add_histories(self):
         """Add missing complete histories by traversing the DAG.
 
-        Use DFS to recursively build up all possible complete histories of the spacetime game. Only
-        adds the history to the data if it is not already present -- this is based on the
-        information set and action tuples that define a history.
+        Uses an inductive expansion based on the enabling relation. A history is
+        built by identifying all accessible (enabled) information sets and branching
+        on their possible outcomes until the history is total and co-total (i.e. complete).
         """
-        # FIXME: these does not seem to produce correct histories when there are enabling relations
-        # with more than one event, e.g. with {(X,0),(Z,0)} enables T, then the histories that
-        # contain T, only contain one of X or Z, not both.
         if "z" not in self.data:
             self.data["z"] = []
 
-        roots = [n for n, info in self.nodes.items() if not info["node_data"]["ps"]]
+        def get_content(h_list):
+            return frozenset(tuple(item.values()) for item in h_list)
 
-        def get_content(h):
-            return frozenset(tuple(item.values()) for item in h)
+        existing_contents = set(get_content(z["h"]) for z in self.data["z"])
+        all_iset_ids = self.info_sets.keys()
 
-        existing = set(get_content(z["h"]) for z in self.data["z"])
-        found = []
+        def is_node_enabled(node_name, current_h_dict):
+            parents = self.nodes[node_name]["node_data"]["ps"]
+            if not parents:
+                return True
 
-        # dfs over the dag to find all paths
-        def find_paths(node_name, current_h):
-            info = self.nodes[node_name]
-            iset_id = info["info_set_id"]
-            for action in self.info_sets[iset_id]["a"]:
-                new_h = current_h + [{"i": iset_id, "a": action}]
-                children = [c["c"] for c in self.adj[node_name] if c["a"] == action]
-                if not children:
-                    # found a leaf in the tree: append the history that got here
-                    found.append(new_h)
-                else:
-                    for child in children:
-                        find_paths(child, new_h)
+            # group parent requirements by their information set
+            # - all different information sets must be satisfied
+            # - if multiple parents are in the same information set, only one must be satisfied
+            iset_to_required_actions = defaultdict(set)
+            for p in parents:
+                p_iset = self.nodes[p["p"]]["info_set_id"]
+                iset_to_required_actions[p_iset].add(p["a"])
 
-        for root in roots:
-            find_paths(root, [])
-        for history in found:
-            # ignore histories that are already present
-            # TODO: optimize this, because we are still calculating the history
-            if get_content(history) not in existing:
-                isets_in_history = [assignment["i"] for assignment in history]
-                history_id = "z_" + "".join(assignment["a"] for assignment in history)
-                self.data["z"].append(
-                    {
-                        "z": history_id,
-                        "h": history,
-                        "s": isets_in_history,
-                        # creating new utility lists avoids referencing the same object again
-                        "u": [{"p": p, "v": 0} for p in self.players],
-                    }
-                )
+            for p_iset, allowed_actions in iset_to_required_actions.items():
+                if p_iset not in current_h_dict or current_h_dict[p_iset] not in allowed_actions:
+                    return False
+            return True
+
+        def is_iset_enabled(iset_id, current_h_dict):
+            # an information set is enabled if at least one of its nodes is enabled
+            for node_entry in self.info_sets[iset_id]["ns"]:
+                if is_node_enabled(node_entry["n"], current_h_dict):
+                    return True
+            return False
+
+        def expand_history(current_h_dict):
+            # find all information sets not yet in history that are now enabled
+            # TODO: optimize, since we only take the first element below
+            candidates = [
+                i
+                for i in all_iset_ids
+                if i not in current_h_dict and is_iset_enabled(i, current_h_dict)
+            ]
+
+            if not candidates:
+                # history is total (maximal)
+                h_list = [{"i": i, "a": a} for i, a in sorted(current_h_dict.items())]
+                content = get_content(h_list)
+                if content not in existing_contents:
+                    history_id = "z_" + "".join(
+                        str(current_h_dict[i]) for i in sorted(current_h_dict.keys())
+                    )
+                    self.data["z"].append(
+                        {
+                            "z": history_id,
+                            "h": h_list,
+                            "s": sorted(list(current_h_dict.keys())),
+                            "u": [{"p": p, "v": 0} for p in self.players],
+                        }
+                    )
+                    existing_contents.add(content)
+                return
+
+            # to avoid permutations of the same history, we pick the first available enabled
+            # information set and branch on its actions -- totality ensures other candidates will
+            # be picked up in subsequent recursion levels
+            target_iset = candidates[0]
+            for action in self.info_sets[target_iset]["a"]:
+                new_h = current_h_dict.copy()
+                new_h[target_iset] = action
+                expand_history(new_h)
+
+        # start recursion from an empty history
+        expand_history(dict())
 
     def add_strategies(self):
         """Add all missing full (non-reduced) strategies for every player.
@@ -481,10 +569,24 @@ class SpacetimeGame:
         return True
 
     def all_adds(self):
-        """Add everything that can be added based on the base CCS data."""
-        for name, member in inspect.getmembers(self):
-            if inspect.ismethod(member) and name.startswith("add"):
-                member()
+        """Add everything that can be added based on the base CCS data.
+
+        For correctness, certain methods need to be run before others, in particular, we need to add
+        strategies and histories before adding human readable, and we need to add histories before
+        we can add the field of which information sets are played in the history.
+        """
+        methods_to_add = {
+            name: member
+            for name, member in inspect.getmembers(self)
+            if inspect.ismethod(member) and name.startswith("add")
+        }
+        del methods_to_add["add_histories"]
+        del methods_to_add["add_human_readable"]
+        self.add_histories()
+        for method in methods_to_add.values():
+            method()
+        # calling this last ensures all information is available for the method
+        self.add_human_readable()
 
     def to_json(self, filename, indent=None):
         """Flush data to a JSON file."""
@@ -508,8 +610,6 @@ class SpacetimeGame:
         if not self.validate():
             raise jsonschema.ValidationError("The data is not valid against the schema.")
         # then add missing fields
-        # FIXME: if histories/strategies get added after the add_human_readable method is called,
-        # then they will not be properly added to the human readable object
         self.all_adds()
         # then check that everything is correct
         self.all_checks()
