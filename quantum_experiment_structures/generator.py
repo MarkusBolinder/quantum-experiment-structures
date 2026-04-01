@@ -662,3 +662,359 @@ class CCSGenerator:
             outcomes = self.measurement_outcomes_dict
 
         return measurements, outcomes
+
+    # TODO: expose this as standalone from the rest of the class too, so that you can essentially
+    # use it as a util function to find the causally secured cover
+    def _merge_requirements(self, left, right):
+        """Merge two required-value maps.
+
+        Args:
+            left (dict[str, int]): Required values for some measurements.
+            right (dict[str, int]): Required values for some measurements.
+
+        Returns:
+            dict[str, int] | None: The merged map, or None if there is a conflict.
+        """
+        merged = dict(left)
+        for m, v in right.items():
+            if m in merged and merged[m] != v:
+                # conflicting values
+                return None
+            merged[m] = v
+        return merged
+
+    def _random_partition(self, items, min_blocks=1, max_blocks=None):
+        """Randomly partition a non-empty collection into non-empty blocks."""
+        items = list(items)
+        n = len(items)
+        if n == 0:
+            return []
+
+        if max_blocks is None:
+            max_blocks = n
+        max_blocks = max(1, min(max_blocks, n))
+        min_blocks = max(1, min(min_blocks, max_blocks))
+
+        k = self.rng.randint(min_blocks, max_blocks)
+        self.rng.shuffle(items)
+
+        if k == 1:
+            return [frozenset(items)]
+
+        cut_points = sorted(self.rng.sample(range(1, n), k - 1))
+        blocks = []
+        start = 0
+        for end in cut_points + [n]:
+            block = frozenset(items[start:end])
+            if block:
+                blocks.append(block)
+            start = end
+        return blocks
+
+    def generate_causally_secured_cover(
+        self,
+        measurements,
+        enabling_relations_dict,
+        *,
+        allow_unclean_local_covers=False,
+        debug=False,
+        max_partition_tries=100,
+    ):
+        """Generate a causally secured cover using random local covers.
+
+        This method assumes unique causal bridges:
+        each measurement has either zero or one enabling relation.
+
+        The procedure is:
+
+        1. Compact the enabling relations into unique bridges.
+        2. Compute transitive causal closures of all measurements.
+        3. Group measurements by identical enabling relation (same LHS).
+        4. For each group, sample a random partition of its RHS into a local cover.
+        5. Turn each local block into a candidate global context by adding its causal
+           support (transitive closure).
+        6. Iteratively merge compatible contexts.
+        7. Remove non-maximal contexts so the result is an antichain.
+
+        Args:
+            measurements (Sequence[str]): Measurement names.
+            enabling_relations_dict (dict[str, list[list[dict]]]): Mapping from each
+                measurement to its enabling alternatives. Under the unique-bridge
+                assumption, each list must have length 0 or 1.
+            allow_unclean_local_covers (bool): If False, reject and resample local
+                partitions that are internally inconsistent. If True, keep them and
+                split incompatible blocks into singletons when needed.
+            debug (bool): Print compacted relations, closures, sampled local covers,
+                and merge progress.
+            max_partition_tries (int): Max number of attempts to sample a clean local
+                partition for each enabling group.
+
+        Returns:
+            list[list[str]]: A causally secured cover as a list of contexts.
+
+        Raises:
+            ValueError: If the enabling relations are not unique-bridge, or if the
+                enabling structure is inconsistent.
+        """
+
+        def canonical_relation(relation):
+            return tuple(sorted(tuple(event.values()) for event in relation))
+
+        # 1) enforce unique bridges and compact them
+        unique_bridge = dict()
+        for m in measurements:
+            rels = enabling_relations_dict.get(m, [])
+            if len(rels) > 1:
+                raise ValueError(
+                    f"Measurement {m!r} has multiple enabling relations, "
+                    "but this generator assumes unique causal bridges."
+                )
+            unique_bridge[m] = rels[0] if rels else []
+
+        # 2) compute transitive closures of required events
+        # closure_req[m] = dict(enabler_measurement -> required_value)
+        closure_req = dict()
+        visiting = set()
+
+        def closure_of(m):
+            if m in closure_req:
+                return closure_req[m]
+            if m in visiting:
+                raise ValueError(f"Cyclic enabling relation detected at measurement {m!r}.")
+            visiting.add(m)
+
+            req = dict()
+            for event in unique_bridge[m]:
+                enabler, value = event.values()
+
+                parent_req = closure_of(enabler)
+                merged = self._merge_requirements(req, parent_req)
+                if merged is None:
+                    raise ValueError(
+                        "Inconsistent enabling relations detected while closing "
+                        f"{m!r}: the transitive closure already requires a conflicting event."
+                    )
+                req = merged
+
+                if enabler in req and req[enabler] != value:
+                    raise ValueError(
+                        "Inconsistent enabling relations detected: "
+                        f"{m!r} requires {enabler}={value}, but the transitive closure "
+                        f"forces {enabler}={req[enabler]}."
+                    )
+                req[enabler] = value
+
+            visiting.remove(m)
+            closure_req[m] = req
+            return req
+
+        for m in measurements:
+            closure_of(m)
+
+        if debug:
+            print("\n[CCS] Compact enabling relations / unique bridges:")
+            for m in measurements:
+                rel = canonical_relation(unique_bridge[m])
+                print(f"  {m}: {rel if rel else '∅'}")
+
+            print("\n[CCS] Transitive closures:")
+            for m in measurements:
+                req = closure_req[m]
+                if req:
+                    pretty = ", ".join(f"{k}={v}" for k, v in sorted(req.items()))
+                    print(f"  τ̄({m}) = {{{pretty}}}")
+                else:
+                    print(f"  τ̄({m}) = ∅")
+
+        # 3) group RHS measurements by identical lhs enabling relation
+        groups = dict()
+        for m in measurements:
+            lhs_key = canonical_relation(unique_bridge[m])
+            groups.setdefault(lhs_key, []).append(m)
+
+        if debug:
+            print("\n[CCS] Compacted enabling groups (same lhs -> rhs measurements):")
+            for lhs_key, rhs in groups.items():
+                lhs_str = lhs_key if lhs_key else "∅"
+                print(f"  lhs={lhs_str}  => rhs={sorted(rhs)}")
+
+        # 4) sample a random local cover for each group
+        def block_is_clean(block):
+            """A block is clean if all measurements in it can coexist."""
+            req = dict()
+            for m in block:
+                merged = self._merge_requirements(req, closure_req[m])
+                if merged is None:
+                    return False
+                req = merged
+            return True
+
+        # TODO: handle the cleanliness of the local covers in the generation in some way
+        local_covers = dict()
+        for lhs_key, rhs in groups.items():
+            rhs = list(rhs)
+            # TODO: can this happen, or would it be okay with groups being a defaultdict?
+            if not rhs:
+                local_covers[lhs_key] = []
+                continue
+
+            sampled = None
+            # FIXME: remove the max_tries logic and force it to succeed every time in some way
+            for _ in range(max_partition_tries):
+                candidate = self._random_partition(rhs, 1, len(rhs))
+                if allow_unclean_local_covers or all(block_is_clean(block) for block in candidate):
+                    sampled = candidate
+                    break
+
+            if sampled is None:
+                raise ValueError(
+                    "Failed to sample a clean local cover for enabling group "
+                    f"{lhs_key if lhs_key else '∅'} after {max_partition_tries} tries."
+                )
+
+            local_covers[lhs_key] = sampled
+
+        if debug:
+            print("\n[CCS] Sampled local covers:")
+            for lhs_key, blocks in local_covers.items():
+                lhs_str = lhs_key if lhs_key else "∅"
+                print(f"  lhs={lhs_str}")
+                for block in blocks:
+                    print(f"    {sorted(block)}")
+
+        # 5) convert each local block into a candidate global context
+        candidate_contexts = []
+        for lhs_key, blocks in local_covers.items():
+            for block in blocks:
+                req = dict()
+                consistent = True
+                for m in block:
+                    merged = self._merge_requirements(req, closure_req[m])
+                    if merged is None:
+                        consistent = False
+                        break
+                    req = merged
+
+                if not consistent:
+                    if allow_unclean_local_covers:
+                        # fall back to singleton contexts if the block is not clean
+                        for m in block:
+                            singleton_req = closure_req[m]
+                            ctx = set([m]) | set(singleton_req.keys())
+                            candidate_contexts.append(
+                                {
+                                    "meas": frozenset(ctx),
+                                    "req": dict(singleton_req),
+                                    "origin": lhs_key,
+                                }
+                            )
+                        continue
+
+                    raise ValueError(
+                        "A sampled local block is internally inconsistent. "
+                        "Set allow_unclean_local_covers=True to relax this."
+                    )
+
+                ctx = set(block) | set(req.keys())
+                candidate_contexts.append(
+                    {
+                        "meas": frozenset(ctx),
+                        "req": req,
+                        "origin": lhs_key,
+                    }
+                )
+
+        if debug:
+            print("\n[CCS] Initial candidate contexts:")
+            for ctx in candidate_contexts:
+                print(f"  {sorted(ctx['meas'])}")
+
+        # 6) repeatedly merge compatible contexts
+        def compatible(a, b):
+            return self._merge_requirements(a["req"], b["req"]) is not None
+
+        changed = True
+        iteration = 0
+        while changed:
+            changed = False
+            # TODO: does the order matter, or will we always get the same causally secured cover
+            # given an enabling structure and local covers?
+            self.rng.shuffle(candidate_contexts)
+
+            new_contexts = []
+            used = [False] * len(candidate_contexts)
+
+            for i, ctx_i in enumerate(candidate_contexts):
+                if used[i]:
+                    continue
+
+                current = {
+                    "meas": set(ctx_i["meas"]),
+                    "req": dict(ctx_i["req"]),
+                }
+                used[i] = True
+
+                for j in range(i + 1, len(candidate_contexts)):
+                    if used[j]:
+                        continue
+
+                    ctx_j = candidate_contexts[j]
+                    merged_req = self._merge_requirements(current["req"], ctx_j["req"])
+                    if merged_req is None:
+                        continue
+
+                    # merge is possible
+                    current["req"] = merged_req
+                    current["meas"].update(ctx_j["meas"])
+                    current["meas"].update(merged_req.keys())
+                    used[j] = True
+                    changed = True
+
+                new_contexts.append(
+                    {
+                        "meas": frozenset(current["meas"]),
+                        "req": current["req"],
+                    }
+                )
+
+            candidate_contexts = new_contexts
+
+            if debug:
+                print(f"\n[CCS] After merge iteration {iteration}:")
+                for ctx in candidate_contexts:
+                    print(f"  {sorted(ctx['meas'])}")
+            iteration += 1
+
+        # 7) remove non-maximal contexts (enforce antichain)
+        candidate_contexts.sort(key=lambda c: len(c["meas"]), reverse=True)
+        cover = []
+        for ctx in candidate_contexts:
+            meas = ctx["meas"]
+            if any(meas < other["meas"] for other in cover):
+                continue
+            cover = [other for other in cover if not other["meas"] < meas]
+            cover.append(ctx)
+
+        # final coverage check
+        covered = set()
+        for ctx in cover:
+            covered.update(ctx["meas"])
+
+        missing = [m for m in measurements if m not in covered]
+        if missing:
+            if not allow_unclean_local_covers:
+                raise ValueError(f"The generated cover does not cover all measurements: {missing}")
+            for m in missing:
+                ctx_meas = frozenset({m} | set(closure_req[m].keys()))
+                cover.append({"meas": ctx_meas, "req": dict(closure_req[m])})
+
+        final_cover = []
+        for ctx in cover:
+            final_cover.append(sorted(ctx["meas"]))
+
+        if debug:
+            print("\n[CCS] Final causally secured cover:")
+            for ctx in final_cover:
+                print(f"  {ctx}")
+
+        return final_cover
