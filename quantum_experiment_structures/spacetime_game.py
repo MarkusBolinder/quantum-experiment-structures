@@ -130,7 +130,7 @@ class SpacetimeGame:
                         f"Parental problems for node '{name}' from parent '{parent}' with "
                         f"action {action}. Parent in nodes: {parent_node is None}. "
                         "(Expected True.) Action in parent node's information set: "
-                        f"{action in info_set["a"]}. (Expected True.)"
+                        f"{action in info_set['a']}. (Expected True.)"
                     )
         return True
 
@@ -167,6 +167,9 @@ class SpacetimeGame:
                     raise ValueError(f"Cycle detected in node graph involving node '{node}'.")
         return True
 
+    # TODO: check that if a measurement is present in the history, then all its enabling
+    # measurements should be present and the converse, that if a group of measurements that enable
+    # something is present, then the something is also present (totality).
     def check_histories_consistency(self):
         """Verify that assignments and utilities in histories reference valid entities.
 
@@ -188,13 +191,13 @@ class SpacetimeGame:
 
                 if iset_id not in self.info_sets:
                     raise ValueError(
-                        f"History '{history["z"]}' references unknown information set '{iset_id}'."
+                        f"History '{history['z']}' references unknown information set '{iset_id}'."
                     )
 
                 if action not in self.info_sets[iset_id]["a"]:
                     raise ValueError(
                         f"Action '{action}' is not playable in information set '{iset_id}' "
-                        f"for history '{history["z"]}'."
+                        f"for history '{history['z']}'."
                     )
             # make sure every information set is only listed once in the history
             for k, v in info_set_counter.items():
@@ -209,7 +212,7 @@ class SpacetimeGame:
                     raise ValueError(
                         "Information sets activated by assignments does not match the information "
                         "sets the history lists as activated. Assigned information sets: "
-                        f"{assigned_info_sets}; {history["s"]=}."
+                        f"{assigned_info_sets}; {history['s']=}."
                     )
 
             # check completeness of utility
@@ -217,7 +220,7 @@ class SpacetimeGame:
             if players_in_utility != self.players:
                 missing = self.players - players_in_utility
                 raise ValueError(
-                    f"Utility for history '{history["z"]}' is missing players: {missing}."
+                    f"Utility for history '{history['z']}' is missing players: {missing}."
                 )
         return True
 
@@ -253,7 +256,7 @@ class SpacetimeGame:
                     if iset["p"] != player:
                         raise ValueError(
                             f"Strategy for player '{player}' contains info set '{iset_id}' "
-                            f"belonging to player '{iset["p"]}'."
+                            f"belonging to player '{iset['p']}'."
                         )
 
                     if action not in iset["a"]:
@@ -417,7 +420,7 @@ class SpacetimeGame:
         sigma_labels = []
         for node_name in all_node_names:
             for child in self.adj[node_name]:
-                sigma_labels.append(f"σ({node_name}, {child["c"]}) = {child["a"]}")
+                sigma_labels.append(f"σ({node_name}, {child['c']}) = {child['a']}")
         es_representation = ", ".join(sigma_labels) if sigma_labels else "∅"
 
         # 4. I, ρ, χ: information sets, player labeling, and action labeling
@@ -434,8 +437,8 @@ class SpacetimeGame:
         # 5. Z: complete histories, represented as sets of (information set, action) assignments
         z_list = []
         for history in self.data.get("z", []):
-            assignments = "{" + ", ".join(f"({a["i"]}, {a["a"]})" for a in history["h"]) + "}"
-            z_list.append(f"{history["z"]} = {assignments}")
+            assignments = "{" + ", ".join(f"({a['i']}, {a['a']})" for a in history["h"]) + "}"
+            z_list.append(f"{history['z']} = {assignments}")
         z_representation = ", ".join(z_list) if z_list else "∅"
 
         # 6. u: utility functions -- mapping outcomes to payoffs for each player
@@ -443,7 +446,7 @@ class SpacetimeGame:
         for history in self.data.get("z", []):
             z_id = history["z"]
             for payoff in history.get("u", []):
-                u_list.append(f"u_{payoff["p"]}({z_id}) = {payoff["v"]}")
+                u_list.append(f"u_{payoff['p']}({z_id}) = {payoff['v']}")
         u_representation = ", ".join(u_list) if u_list else "∅"
 
         # 7. s: strategies, represented as sets of histories for each player
@@ -452,9 +455,9 @@ class SpacetimeGame:
             player = strategy_group["p"]
             strategies = []
             for strategy in strategy_group["s"]:
-                assignments = "{" + ", ".join(f"({a["i"]}, {a["a"]})" for a in strategy) + "}"
+                assignments = "{" + ", ".join(f"({a['i']}, {a['a']})" for a in strategy) + "}"
                 strategies.append(assignments)
-            s_list.append(f"S_{player} = {{{", ".join(strategies)}}}")
+            s_list.append(f"S_{player} = {{{', '.join(strategies)}}}")
         s_representation = ", ".join(s_list) if s_list else "∅"
 
         self.data["h"] = {
