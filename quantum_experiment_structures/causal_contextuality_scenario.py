@@ -1,13 +1,49 @@
 """Validate a JSON representation of a CCS using both a schema and additional consistency checks."""
 
 from collections import defaultdict, deque
+from dataclasses import dataclass
 import inspect
-import itertools
 import json
 from pathlib import Path
 
 from quantum_experiment_structures.data.schemas import CCS_SCHEMA
 import jsonschema
+
+
+@dataclass(frozen=True)
+class _BobNode:
+    """Internal representation of a Bob node.
+
+    Attributes:
+        n: Unique node id.
+        bridge: The enabling bridge represented by this Bob node.
+        ps: Parent witness pairs as (parent_node_id, action_label).
+        a: The actions available at this Bob node.
+    """
+
+    n: str
+    bridge: frozenset[tuple[str, str]]
+    ps: tuple[tuple[str, str], ...]
+    a: tuple[str, ...]
+
+
+@dataclass(frozen=True)
+class _AlfredNode:
+    """Internal representation of an Alfred node.
+
+    Attributes:
+        n: Unique node id.
+        bob: Parent Bob node id.
+        m: Measurement name.
+        c: Local context.
+        a: Alfred action label, i.e. the context label.
+    """
+
+    n: str
+    bob: str
+    m: str
+    c: frozenset[str]
+    a: str
 
 
 class CausalContextualityScenario:
@@ -510,8 +546,7 @@ class CausalContextualityScenario:
             items: An iterable of hashable items.
 
         Returns:
-            A list containing the unique items from `items`, in their first
-            observed order.
+            A list containing the unique items from 'items', in their first observed order.
         """
         seen = set()
         result = []
@@ -530,8 +565,7 @@ class CausalContextualityScenario:
                 {'v': 0}, a string, or another JSON-serializable value.
 
         Returns:
-            A string label suitable for use as an action label in the game
-            schema.
+            A string label suitable for use as an action label in the game schema.
         """
         if isinstance(value, dict) and set(value.keys()) == {"v"}:
             value = value["v"]
@@ -556,8 +590,8 @@ class CausalContextualityScenario:
             return "{}"
         return "{" + ",".join(sorted(context)) + "}"
 
-    @classmethod
-    def _bridge_label(cls, bridge):
+    @staticmethod
+    def _bridge_label(bridge):
         """Format an enabling bridge as a readable string label.
 
         Args:
@@ -602,19 +636,14 @@ class CausalContextualityScenario:
                 The base form is:
                     B:{} for the root Bob node
                     B:{Y=0} for a Bob node whose enabling bridge is Y=0
-                If the same bridge must be split into several distinct nodes,
-                the implementation appends witness information (which Alfred node enabled it):
-                    B:{Y=0}|A:B:{}:Y:{X,Y}@0;A:B:{}:Y:{Y,Z}@0
-                That means:
-                    the node is a Bob node, its enabling bridge is {Y=0},
-                    it is witnessed by those exact Alfred-parent/action pairs
+
             Alfred node ids
                 The form is:
                     A:<bob-node-id>:<measurement>:<context>
                 Example:
                     A:B:{}:X:{X,Y}
                 This means:
-                    Alfred node reached from Bob root B:{} measurement X local context {X,Y}
+                    Alfred node reached from Bob root B:{}, measurement X, local context {X,Y}.
 
         Information set ids
             Bob:<node-id> for Bob singleton sets
@@ -668,9 +697,11 @@ class CausalContextualityScenario:
         bob_nodes = []
         alfred_nodes = []
 
-        # store signatures of nodes for caching
-        bob_sig_seen = set()
-        alfred_sig_seen = set()
+        # store nodes for fast lookup
+        bob_by_id = dict()
+        bob_by_bridge = dict()
+        alfred_by_id = dict()
+        alfred_by_signature = set()
 
         # Alfred nodes grouped by measurement
         alfred_by_measurement = defaultdict(list)
@@ -679,13 +710,12 @@ class CausalContextualityScenario:
         bob_queue = deque()
 
         def add_bob_node(bridge, parents):
-            """Create a Bob node instance keyed by bridge + exact parent witness set."""
-            parent_entries = tuple(sorted(tuple(p.values()) for p in parents))
-            sig = (tuple(sorted(bridge)), parent_entries)
-            if sig in bob_sig_seen:
+            """Create a Bob node instance keyed only by its enabling bridge."""
+            if bridge in bob_by_bridge:
                 return None
 
-            bob_sig_seen.add(sig)
+            # NOTE: this needs to be sorted for the key lookups to work properly
+            parent_entries = tuple(sorted(tuple(p.values()) for p in parents))
             bridge_label = self._bridge_label(bridge)
 
             if not parent_entries:
@@ -694,10 +724,15 @@ class CausalContextualityScenario:
                 parent_part = ";".join(f"{pid}@{action}" for pid, action in parent_entries)
                 node_id = f"B:{bridge_label}|{parent_part}"
 
-            node = {
-                "n": node_id,
-                "ps": [{"p": pid, "a": action} for pid, action in parent_entries],
-            }
+            node = _BobNode(
+                n=node_id,
+                bridge=bridge,
+                ps=parent_entries,
+                a=tuple(self._context_label(context) for context in local_cover[bridge]),
+            )
+
+            bob_by_bridge[bridge] = node
+            bob_by_id[node_id] = node
             bob_nodes.append(node)
             bob_queue.append(node_id)
             return node
@@ -706,40 +741,23 @@ class CausalContextualityScenario:
             """Create an Alfred node for a particular Bob node, measurement, and context."""
             context_label = self._context_label(context)
             sig = (bob_node_id, measurement, context_label)
-            if sig in alfred_sig_seen:
+            if sig in alfred_by_signature:
                 return None
 
-            alfred_sig_seen.add(sig)
+            alfred_by_signature.add(sig)
             node_id = f"A:{bob_node_id}:{measurement}:{context_label}"
-            node = {
-                "n": node_id,
-                "ps": [{"p": bob_node_id, "a": context_label}],
-            }
+            node = _AlfredNode(
+                n=node_id,
+                bob=bob_node_id,
+                m=measurement,
+                c=context,
+                a=context_label,
+            )
+
             alfred_nodes.append(node)
+            alfred_by_id[node_id] = node
             alfred_by_measurement[measurement].append(node)
             return node
-
-        def _get_bridge(node_id):
-            """Find the causal bridge for the given Bob node."""
-            bridge = None
-            if node_id == f"B:{self._bridge_label(root)}":
-                bridge = root
-            else:
-                # recover bridge from the node id prefix
-                prefix = node_id.split("|", 1)[0]
-                bridge_text = prefix[2:]  # strip 'B:'
-                if bridge_text == "{}":
-                    # root
-                    bridge = frozenset()
-                else:
-                    parsed = set()
-                    bridge_items = bridge_text.strip("{}")
-                    if bridge_items:
-                        for part in bridge_items.split(","):
-                            m, v = part.split("=")
-                            parsed.add((m, v))
-                    bridge = frozenset(parsed)
-            return bridge
 
         # root node
         add_bob_node(root, [])
@@ -754,7 +772,7 @@ class CausalContextualityScenario:
                     continue
                 processed_bob.add(current_id)
 
-                current_bridge = _get_bridge(current_id)
+                current_bridge = bob_by_id[current_id].bridge
 
                 for context in local_cover[current_bridge]:
                     for measurement in sorted(context):
@@ -764,10 +782,12 @@ class CausalContextualityScenario:
             """Create all Bob nodes whose enabling bridges are currently witnessable."""
             created_any = False
 
-            for measurement in enabling_of:
-                bridge = enabling_of[measurement]
+            for bridge in enabled_by:
                 if not bridge:
                     continue  # root already handles empty enabling set
+
+                if bridge in bob_by_bridge:
+                    continue
 
                 antecedents = bridge  # [(m, v), ...]
                 candidate_lists = []
@@ -783,18 +803,15 @@ class CausalContextualityScenario:
                 if not possible:
                     continue
 
-                for combo in itertools.product(*candidate_lists):
-                    parents = []
-                    for alfred_node, (_, ant_value) in zip(combo, antecedents):
-                        parents.append({"p": alfred_node["n"], "a": ant_value})
+                # Alfred nodes for the same measuremnt lead to the same Bob node
+                # because they correspond to the same measurement and the same causal bridge
+                parents = []
+                for alfred_measurement_nodes, (_, ant_value) in zip(candidate_lists, antecedents):
+                    for alfred_node in alfred_measurement_nodes:
+                        parents.append({"p": alfred_node.n, "a": ant_value})
 
-                    parent_entries = tuple(sorted(tuple(p.values()) for p in parents))
-                    sig = (tuple(sorted(bridge)), parent_entries)
-                    if sig in bob_sig_seen:
-                        continue
-
-                    add_bob_node(bridge, parents)
-                    created_any = True
+                add_bob_node(bridge, parents)
+                created_any = True
 
             return created_any
 
@@ -809,16 +826,17 @@ class CausalContextualityScenario:
 
         # Bob: singleton information sets
         for bob_node in bob_nodes:
-            node_id = bob_node["n"]
-            bridge = _get_bridge(node_id)
-
-            actions = [self._context_label(c) for c in local_cover[bridge]]
             info_sets.append(
                 {
-                    "i": f"Bob:{node_id}",
-                    "ns": [bob_node],
+                    "i": f"Bob:{bob_node.n}",
+                    "ns": [
+                        {
+                            "n": bob_node.n,
+                            "ps": [{"p": pid, "a": action} for pid, action in bob_node.ps],
+                        }
+                    ],
                     "p": "Bob",
-                    "a": self._dedupe_preserve_order(actions),
+                    "a": self._dedupe_preserve_order(list(bob_node.a)),
                 }
             )
 
@@ -827,7 +845,13 @@ class CausalContextualityScenario:
             info_sets.append(
                 {
                     "i": f"Alfred:{measurement}",
-                    "ns": nodes,
+                    "ns": [
+                        {
+                            "n": node.n,
+                            "ps": [{"p": node.bob, "a": node.a}],
+                        }
+                        for node in nodes
+                    ],
                     "p": "Alfred",
                     "a": self._dedupe_preserve_order(outcomes_by_measurement[measurement]),
                 }
@@ -837,15 +861,10 @@ class CausalContextualityScenario:
         actions = set()
 
         # Bob actions
-        for bob_node in bob_nodes:
-            node_id = bob_node["n"]
-            bridge = _get_bridge(node_id)
-
-            actions.update(self._context_label(c) for c in local_cover[bridge])
+        actions.update(action for bob_node in bob_nodes for action in bob_node.a)
 
         # Alfred actions
-        for measurement, labels in outcomes_by_measurement.items():
-            actions.update(labels)
+        actions.update(out for outcomes in outcomes_by_measurement.values() for out in outcomes)
 
         return {
             "ps": ["Bob", "Alfred"],
