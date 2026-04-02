@@ -211,6 +211,10 @@ class CausalContextualityScenario:
         cover is valid against the schema [ ["A", "B"], ["B", "A"] ], but contains duplicate
         contexts. The schema only flags covers like [ ["A", "B"], ["A", "B"] ] as invalid.
         """
+        if any(measurement.get("c") is None for measurement in self.data["ms"]):
+            # one or more measurements are missing their membership contexts, so we can not properly
+            # check that the union of this agree with the top-level cover
+            return True
         contexts = set()
         for measurement in self.data["ms"]:
             for context in measurement["c"]:
@@ -470,20 +474,6 @@ class CausalContextualityScenario:
             return "{}"
         return "{" + ",".join(sorted(context)) + "}"
 
-    @staticmethod
-    def _bridge_label(bridge):
-        """Format an enabling bridge as a readable string label.
-
-        Args:
-            bridge: A frozenset of (measurement, outcome) pairs.
-
-        Returns:
-            A string of the form '{}', or '{X=0,Y=1}' with sorted entries.
-        """
-        if not bridge:
-            return "{}"
-        return "{" + ",".join(f"{m}={v}" for m, v in sorted(bridge)) + "}"
-
     def to_spacetime_game(self):
         """Convert the scenario into a spacetime game dictionary.
 
@@ -596,13 +586,14 @@ class CausalContextualityScenario:
 
             # NOTE: this needs to be sorted for the key lookups to work properly
             parent_entries = tuple(sorted(tuple(p.values()) for p in parents))
-            bridge_label = self._bridge_label(bridge)
 
-            if not parent_entries:
-                node_id = f"B:{bridge_label}"
+            if not bridge:
+                bridge_str = "{}"
             else:
-                parent_part = ";".join(f"{pid}@{action}" for pid, action in parent_entries)
-                node_id = f"B:{bridge_label}|{parent_part}"
+                inside = ",".join(f"({m},{v})" for m, v in bridge)
+                bridge_str = "{" + inside + "}"
+
+            node_id = f"B:{bridge_str}"
 
             node = _BobNode(
                 n=node_id,
@@ -625,7 +616,7 @@ class CausalContextualityScenario:
                 return None
 
             alfred_by_signature.add(sig)
-            node_id = f"A:{bob_node_id}:{measurement}:{context_label}"
+            node_id = f"A:{measurement}_{context_label}"
             node = _AlfredNode(
                 n=node_id,
                 bob=bob_node_id,
