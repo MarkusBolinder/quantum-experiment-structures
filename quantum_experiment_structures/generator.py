@@ -768,7 +768,6 @@ class CCSGenerator:
         self,
         measurements,
         enabling_relations_dict,
-        *,
         allow_unclean_local_covers=False,
         debug=False,
         max_partition_tries=100,
@@ -786,8 +785,7 @@ class CCSGenerator:
         4. For each group, sample a random partition of its RHS into a local cover.
         5. Turn each local block into a candidate global context by adding its causal
            support (transitive closure).
-        6. Iteratively merge compatible contexts.
-        7. Remove non-maximal contexts so the result is an antichain.
+        6. Remove non-maximal contexts so the result is an antichain.
 
         Args:
             measurements (Sequence[str]): Measurement names.
@@ -982,63 +980,7 @@ class CCSGenerator:
             for ctx in candidate_contexts:
                 print(f"  {sorted(ctx['meas'])}")
 
-        # 6) repeatedly merge compatible contexts
-        def compatible(a, b):
-            return self._merge_requirements(a["req"], b["req"]) is not None
-
-        changed = True
-        iteration = 0
-        while changed:
-            changed = False
-            # TODO: does the order matter, or will we always get the same causally secured cover
-            # given an enabling structure and local covers?
-            self.rng.shuffle(candidate_contexts)
-
-            new_contexts = []
-            used = [False] * len(candidate_contexts)
-
-            for i, ctx_i in enumerate(candidate_contexts):
-                if used[i]:
-                    continue
-
-                current = {
-                    "meas": set(ctx_i["meas"]),
-                    "req": dict(ctx_i["req"]),
-                }
-                used[i] = True
-
-                for j in range(i + 1, len(candidate_contexts)):
-                    if used[j]:
-                        continue
-
-                    ctx_j = candidate_contexts[j]
-                    merged_req = self._merge_requirements(current["req"], ctx_j["req"])
-                    if merged_req is None:
-                        continue
-
-                    # merge is possible
-                    current["req"] = merged_req
-                    current["meas"].update(ctx_j["meas"])
-                    current["meas"].update(merged_req.keys())
-                    used[j] = True
-                    changed = True
-
-                new_contexts.append(
-                    {
-                        "meas": frozenset(current["meas"]),
-                        "req": current["req"],
-                    }
-                )
-
-            candidate_contexts = new_contexts
-
-            if debug:
-                print(f"\n[CCS] After merge iteration {iteration}:")
-                for ctx in candidate_contexts:
-                    print(f"  {sorted(ctx['meas'])}")
-            iteration += 1
-
-        # 7) remove non-maximal contexts (enforce antichain)
+        # 6) remove non-maximal contexts (enforce antichain)
         candidate_contexts.sort(key=lambda c: len(c["meas"]), reverse=True)
         cover = []
         for ctx in candidate_contexts:
