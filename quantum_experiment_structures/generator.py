@@ -48,6 +48,7 @@ import random
 import string
 
 import quantum_experiment_structures as qes
+from quantum_experiment_structures.data.local_covers import LOCAL_COVERS
 from quantum_experiment_structures.data.schemas import CCS_GENERATOR_SETTINGS_SCHEMA
 from quantum_experiment_structures.utils import utils
 
@@ -683,33 +684,85 @@ class CCSGenerator:
             merged[m] = v
         return merged
 
-    def _random_partition(self, items, min_blocks=1, max_blocks=None):
-        """Randomly partition a non-empty collection into non-empty blocks."""
-        items = list(items)
-        n = len(items)
-        if n == 0:
-            return []
+    def _generate_local_cover(self, measurements, iterations=100):
+        """Generate a local cover using, essentially, a Markov Chain Monte Carlo approach.
 
-        if max_blocks is None:
-            max_blocks = n
-        max_blocks = max(1, min(max_blocks, n))
-        min_blocks = max(1, min(min_blocks, max_blocks))
+        We start with the cover of all singletons, and then we either add a random subset of the
+        measurement set as a context, alter a measurement in one of the existing contexts, or split
+        a context into two parts -- these happen with roughly equal probability (0.3, 0.3 and 0.4,
+        respectively). This does not sample uniformly from the set of all local covers, but it
+        should be able to reach every possible local cover. The mixing will improve with more
+        iterations, but this will take longer to run (of course).
+        """
+        measurement_set = set(measurements)
+        # start with all singletons
+        current_cover = [frozenset([m]) for m in measurements]
 
-        k = self.rng.randint(min_blocks, max_blocks)
-        self.rng.shuffle(items)
+        def cleanup(cover):
+            """Ensure the cover is an anti-chain (maximal) and a cover."""
+            # 1) remove non-maximal sets
+            maximal = []
+            sorted_cover = sorted(list(cover), key=len, reverse=True)
+            for s in sorted_cover:
+                if not any(s <= other for other in maximal):
+                    maximal.append(s)
 
-        if k == 1:
-            return [frozenset(items)]
+            # 2) ensure all measurements are covered
+            current_union = set().union(*maximal)
+            missing = measurement_set - current_union
+            for m in missing:
+                maximal.append(frozenset([m]))
+            return maximal
 
-        cut_points = sorted(self.rng.sample(range(1, n), k - 1))
-        blocks = []
-        start = 0
-        for end in cut_points + [n]:
-            block = frozenset(items[start:end])
-            if block:
-                blocks.append(block)
-            start = end
-        return blocks
+        for _ in range(iterations):
+            move_type = self.rng.random()
+            new_cover = list(current_cover)
+
+            if move_type < 0.3 or not new_cover:
+                # add a random subset from power set
+                n = self.rng.randint(1, len(measurements))
+                s = frozenset(self.rng.sample(measurements, n))
+                new_cover.append(s)
+
+            elif move_type < 0.6:
+                # mutate an existing context
+                idx = self.rng.randrange(len(new_cover))
+                m = self.rng.choice(measurements)
+                target = set(new_cover[idx])
+                if m in target and len(target) > 1:
+                    target.remove(m)
+                else:
+                    target.add(m)
+                new_cover[idx] = frozenset(target)
+
+            else:
+                # split a context (avoids getting stuck in the trivial all measurement cover)
+                idx = self.rng.randrange(len(new_cover))
+                target = list(new_cover[idx])
+                if len(target) > 1:
+                    self.rng.shuffle(target)
+                    split_point = self.rng.randint(1, len(target) - 1)
+                    c1 = frozenset(target[:split_point])
+                    c2 = frozenset(target[split_point:])
+                    new_cover.pop(idx)
+                    new_cover.extend([c1, c2])
+
+            current_cover = cleanup(new_cover)
+
+        return sorted([sorted(list(c)) for c in current_cover])
+
+    def sample_local_cover(self, measurements):
+        # TODO: how should the number of iterations be handled?
+        if len(measurements) <= len(LOCAL_COVERS):
+            local_covers = LOCAL_COVERS[len(measurements) - 1]
+            idx_to_measurement = {i: m for i, m in enumerate(measurements)}
+            base_cover = self.rng.choice(local_covers)
+            # rename all the measurements in the base cover to the measurements specified
+            # NOTE: measurements are represented by indices in the statically stored cover, so we
+            # can immediately use them to convert to the real measurements
+            cover = [[idx_to_measurement[i] for i in context] for context in base_cover]
+            return cover
+        return self._generate_local_cover(measurements)
 
     def generate_causally_secured_cover(
         self,
@@ -861,7 +914,7 @@ class CCSGenerator:
             sampled = None
             # FIXME: remove the max_tries logic and force it to succeed every time in some way
             for _ in range(max_partition_tries):
-                candidate = self._random_partition(rhs, 1, len(rhs))
+                candidate = self.sample_local_cover(rhs)
                 if allow_unclean_local_covers or all(block_is_clean(block) for block in candidate):
                     sampled = candidate
                     break
