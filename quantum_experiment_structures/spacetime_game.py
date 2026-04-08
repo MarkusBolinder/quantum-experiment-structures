@@ -482,6 +482,121 @@ class SpacetimeGame:
                 if frozenset(tuple(a.values()) for a in strategy) not in existing:
                     group["s"].append(strategy)
 
+    def add_reduced_strategies(self):
+        """Add all reduced strategies for every player to the game data.
+
+        A reduced strategy assigns outcomes only to activated information sets.
+        An information set is activated if there exists a sequence of outcomes
+        for other players that reaches it, given the current player's strategy.
+        """
+        if "rs" not in self.data:
+            self.data["rs"] = []
+
+        player_to_strategy = {strategy["p"]: strategy for strategy in self.data["rs"]}
+        missing = self.players - set(player_to_strategy)
+        for player in missing:
+            strategy_skeleton = {"p": player, "s": []}
+            player_to_strategy[player] = strategy_skeleton
+            self.data["rs"].append(strategy_skeleton)
+
+        for player in self.players:
+            player_isets = {i for i, data in self.info_sets.items() if data["p"] == player}
+
+            group = player_to_strategy[player]
+
+            # TODO: check all the existing strategies and add the hashable representations to the
+            # set so that we do not add duplicate strategies
+            existing_contents = set()
+
+            def get_activated_information_sets(strategy_map):
+                """Return the set of info_set_ids activated by this player's strategy."""
+                activated = set()
+                # start with nodes that have no parents
+                reachable_nodes = set(
+                    name
+                    for name, node_info in self.nodes.items()
+                    if not node_info["node_data"]["ps"]
+                )
+
+                # the DAG form of the game means we can propagate reachability
+                # using a simple fixed-point iteration or topological approach
+                seen = set()
+                while True:
+                    new_reachable = False
+                    for name in list(reachable_nodes):
+                        if name in seen:
+                            continue
+                        seen.add(name)
+
+                        iset_id = self.nodes[name]["info_set_id"]
+                        activated.add(iset_id)
+
+                        # find children nodes enabled by these possible actions
+                        for child_name, child_info in self.nodes.items():
+                            if child_name in reachable_nodes:
+                                continue
+
+                            # a child node is reachable if parent requirements are met
+                            parents = child_info["node_data"]["ps"]
+                            if not parents:
+                                continue
+
+                            child_reachable = True
+                            for p in parents:
+                                parent, parent_action = p.values()
+                                p_iset = self.nodes[parent]["info_set_id"]
+
+                                # if the parent node is not reachable, or the required action
+                                # is not among the 'possible' actions, we cannot reach this child
+                                if parent not in reachable_nodes or (
+                                    self.info_sets[p_iset]["p"] == player
+                                    and strategy_map.get(p_iset) != parent_action
+                                ):
+                                    child_reachable = False
+                                    break
+                                # NOTE: for other players, we already assume any of their
+                                # actions are possible if their node is reachable
+
+                            if child_reachable:
+                                reachable_nodes.add(child_name)
+                                new_reachable = True
+
+                    if not new_reachable:
+                        break
+
+                return activated
+
+            def expand(current_map):
+                # 1) identify what is currently activated based on choices made so far
+                activated = get_activated_information_sets(current_map)
+                player_activated = activated.intersection(player_isets)
+
+                # 2) find info sets we still need to decide
+                to_decide = [i for i in player_activated if i not in current_map]
+
+                if not to_decide:
+                    # base case: no more reachable nodes to decide for
+                    final_strategy = []
+                    for i in player_isets:
+                        # assign action if activated, else bottom
+                        action = current_map.get(i, "⟂")
+                        final_strategy.append({"i": i, "a": action})
+
+                    content = frozenset(tuple(assignment.values()) for assignment in final_strategy)
+                    if content not in existing_contents:
+                        group["s"].append(final_strategy)
+                        existing_contents.add(content)
+                    return
+
+                # 3) branch on the next available activated info set
+                target = to_decide[0]
+                for action in self.info_sets[target]["a"]:
+                    next_map = current_map.copy()
+                    next_map[target] = action
+                    expand(next_map)
+
+            expand(dict())
+
     def add_human_readable(self):
         """Add a human readable representation of the spacetime game to the data.
 
