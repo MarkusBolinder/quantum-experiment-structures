@@ -114,23 +114,20 @@ class SpacetimeGame:
         """
         for name, node_info in self.nodes.items():
             node = node_info["node_data"]
-            info_set = self.info_sets[node_info["info_set_id"]]
             # check parents
             for p in node["ps"]:
                 parent, action = p.values()
                 parent_node = self.nodes.get(parent)
                 if parent_node is not None:
-                    parent_info_set_id = parent_node["info_set_id"]
-                if (
-                    parent == name
-                    or parent is None
-                    or action not in self.info_sets[parent_info_set_id]["a"]
-                ):
+                    parent_info_set = self.info_sets[parent_node["info_set_id"]]
+                else:
+                    parent_info_set = {"a": []}
+                if parent == name or parent_node is None or action not in parent_info_set["a"]:
                     raise ValueError(
                         f"Parental problems for node '{name}' from parent '{parent}' with "
                         f"action {action}. Parent in nodes: {parent_node is None}. "
                         "(Expected True.) Action in parent node's information set: "
-                        f"{action in info_set['a']}. (Expected True.)"
+                        f"{action in parent_info_set['a']}. (Expected True.)"
                     )
         return True
 
