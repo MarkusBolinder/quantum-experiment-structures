@@ -84,7 +84,7 @@ class CausalContextualityScenario:
     def __repr__(self):
         if "h" in self.data:
             return "\n".join(f"{k:6s}: {v}" for k, v in self.data["h"].items())
-        return self.data
+        return str(self.data)
 
     def validate(self):
         """Validate the data using the CCS schema."""
@@ -132,7 +132,7 @@ class CausalContextualityScenario:
             ValueError: if any measurement outcome does not have the leaf field, or if the outcome
                 is incorrectly labeled as leaf/not a leaf.
         """
-        if not self._handle_leaves(False):
+        if not self._handle_leaves(True):
             raise ValueError(
                 "Leaves are not valid. Either a leaf is missing, or a leaf has the incorrect value."
             )
