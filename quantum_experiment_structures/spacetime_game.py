@@ -354,6 +354,135 @@ class SpacetimeGame:
             return False
         return True
 
+    def check_reduced_strategies_consistency(self):
+        """Verify reduced strategy validity, reachability, and uniqueness.
+
+        Checks:
+            1. Basic structure: player matching and valid action choices.
+            2. Reachability: ⟂ is only used for non-activated sets; real actions
+               are only used for activated sets.
+            3. Uniqueness: No duplicate reduced strategies for a player.
+
+        Raises:
+            ValueError if any of the above checks are violated.
+        """
+        if "rs" not in self.data:
+            return True
+
+        player_to_isets = defaultdict(set)
+        for iset, data in self.info_sets.items():
+            player_to_isets[data["p"]].add(iset)
+
+        for strategy_group in self.data["rs"]:
+            player = strategy_group["p"]
+            if player not in self.players:
+                raise ValueError(f"Reduced strategy group lists unknown player '{player}'.")
+
+            player_isets = player_to_isets[player]
+            seen_strategies = set()
+
+            for strategy in strategy_group["s"]:
+                # 1) convert strategy to a lookup map and check basic validity
+                strategy_map = dict()
+                for assignment in strategy:
+                    iset_id, action = assignment.values()
+
+                    if iset_id not in player_isets:
+                        raise ValueError(
+                            f"Player '{player}' strategy contains foreign info set '{iset_id}'."
+                        )
+
+                    if action != "⟂" and action not in self.info_sets[iset_id]["a"]:
+                        raise ValueError(f"Invalid action '{action}' in info set '{iset_id}'.")
+
+                    strategy_map[iset_id] = action
+
+                # 2) get all activated information sets, given the strategy
+                # TODO: this call is expensive, should probably optimize in some way
+                activated = self._get_activated_information_sets_for_player(player, strategy_map)
+
+                # 3) verify reachability/bottom consistency
+                for iset_id in player_isets:
+                    action = strategy_map.get(iset_id)
+                    is_active = iset_id in activated
+
+                    if is_active and action == "⟂":
+                        raise ValueError(
+                            f"Information set '{iset_id}' is reachable "
+                            f"but assigned '⟂' in strategy: {strategy}"
+                        )
+                    if not is_active and action != "⟂":
+                        raise ValueError(
+                            f"Information set '{iset_id}' is not reachable "
+                            f"but assigned real action '{action}' in strategy: {strategy}"
+                        )
+
+                # 4) check for uniqueness
+                strategy_tuple = tuple(sorted(tuple(item.values()) for item in strategy))
+                if strategy_tuple in seen_strategies:
+                    raise ValueError(
+                        f"Duplicate reduced strategy found for player '{player}': {strategy}"
+                    )
+                seen_strategies.add(strategy_tuple)
+
+        return True
+
+    def _get_activated_information_sets_for_player(self, player, strategy_map):
+        """Return the set of info_set_ids activated by this player's strategy."""
+        activated = set()
+        # start with nodes that have no parents
+        reachable_nodes = set(
+            name for name, node_info in self.nodes.items() if not node_info["node_data"]["ps"]
+        )
+
+        # the DAG form of the game means we can propagate reachability
+        # using a simple fixed-point iteration or topological approach
+        seen = set()
+        while True:
+            new_reachable = False
+            for name in list(reachable_nodes):
+                if name in seen:
+                    continue
+                seen.add(name)
+
+                iset_id = self.nodes[name]["info_set_id"]
+                activated.add(iset_id)
+
+                # find children nodes enabled by these possible actions
+                for child_name, child_info in self.nodes.items():
+                    if child_name in reachable_nodes:
+                        continue
+
+                    # a child node is reachable if parent requirements are met
+                    parents = child_info["node_data"]["ps"]
+                    if not parents:
+                        continue
+
+                    child_reachable = True
+                    for p in parents:
+                        parent, parent_action = p.values()
+                        p_iset = self.nodes[parent]["info_set_id"]
+
+                        # if the parent node is not reachable, or the required action
+                        # is not among the 'possible' actions, we cannot reach this child
+                        if parent not in reachable_nodes or (
+                            self.info_sets[p_iset]["p"] == player
+                            and strategy_map.get(p_iset) != parent_action
+                        ):
+                            child_reachable = False
+                            break
+                        # NOTE: for other players, we already assume any of their
+                        # actions are possible if their node is reachable
+
+                    if child_reachable:
+                        reachable_nodes.add(child_name)
+                        new_reachable = True
+
+            if not new_reachable:
+                break
+
+        return activated
+
     def add_played_information_sets(self):
         """Populate each history with the information sets activated in that history."""
         for history in self.data.get("z", []):
@@ -492,6 +621,10 @@ class SpacetimeGame:
         if "rs" not in self.data:
             self.data["rs"] = []
 
+        player_to_isets = defaultdict(set)
+        for iset, data in self.info_sets.items():
+            player_to_isets[data["p"]].add(iset)
+
         player_to_strategy = {strategy["p"]: strategy for strategy in self.data["rs"]}
         missing = self.players - set(player_to_strategy)
         for player in missing:
@@ -500,75 +633,16 @@ class SpacetimeGame:
             self.data["rs"].append(strategy_skeleton)
 
         for player in self.players:
-            player_isets = {i for i, data in self.info_sets.items() if data["p"] == player}
-
+            player_isets = player_to_isets[player]
             group = player_to_strategy[player]
 
             # TODO: check all the existing strategies and add the hashable representations to the
             # set so that we do not add duplicate strategies
             existing_contents = set()
 
-            def get_activated_information_sets(strategy_map):
-                """Return the set of info_set_ids activated by this player's strategy."""
-                activated = set()
-                # start with nodes that have no parents
-                reachable_nodes = set(
-                    name
-                    for name, node_info in self.nodes.items()
-                    if not node_info["node_data"]["ps"]
-                )
-
-                # the DAG form of the game means we can propagate reachability
-                # using a simple fixed-point iteration or topological approach
-                seen = set()
-                while True:
-                    new_reachable = False
-                    for name in list(reachable_nodes):
-                        if name in seen:
-                            continue
-                        seen.add(name)
-
-                        iset_id = self.nodes[name]["info_set_id"]
-                        activated.add(iset_id)
-
-                        # find children nodes enabled by these possible actions
-                        for child_name, child_info in self.nodes.items():
-                            if child_name in reachable_nodes:
-                                continue
-
-                            # a child node is reachable if parent requirements are met
-                            parents = child_info["node_data"]["ps"]
-                            if not parents:
-                                continue
-
-                            child_reachable = True
-                            for p in parents:
-                                parent, parent_action = p.values()
-                                p_iset = self.nodes[parent]["info_set_id"]
-
-                                # if the parent node is not reachable, or the required action
-                                # is not among the 'possible' actions, we cannot reach this child
-                                if parent not in reachable_nodes or (
-                                    self.info_sets[p_iset]["p"] == player
-                                    and strategy_map.get(p_iset) != parent_action
-                                ):
-                                    child_reachable = False
-                                    break
-                                # NOTE: for other players, we already assume any of their
-                                # actions are possible if their node is reachable
-
-                            if child_reachable:
-                                reachable_nodes.add(child_name)
-                                new_reachable = True
-
-                    if not new_reachable:
-                        break
-
-                return activated
-
             def expand(current_map):
                 # 1) identify what is currently activated based on choices made so far
-                activated = get_activated_information_sets(current_map)
+                activated = self._get_activated_information_sets_for_player(player, current_map)
                 player_activated = activated.intersection(player_isets)
 
                 # 2) find info sets we still need to decide
@@ -579,6 +653,7 @@ class SpacetimeGame:
                     final_strategy = []
                     for i in player_isets:
                         # assign action if activated, else bottom
+                        # TODO: should probably use None instead of '⟂' and update schema
                         action = current_map.get(i, "⟂")
                         final_strategy.append({"i": i, "a": action})
 
