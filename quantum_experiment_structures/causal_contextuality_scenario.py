@@ -340,7 +340,185 @@ class CausalContextualityScenario:
             if inspect.ismethod(member) and name.startswith("add"):
                 member()
 
-    # TODO: this will probably flag most scenarios created by CCSGenerator -- how to handle?
+    def to_json(self, filename, indent=None):
+        """Flush data to a JSON file.
+
+        Args:
+            filename: path-like name of the output file.
+        """
+        path = Path(filename)
+        if not path.suffix:
+            path = path.with_suffix(".json")
+
+        with path.open("w") as f:
+            json.dump(self.data, f, indent=indent)
+
+    def append_to_json_lines(self, filename):
+        """Append the CCS data to a JSON Lines file.
+
+        Creates the file if it does not already exist. Each call writes
+        one JSON object on a single line.
+
+        Args:
+            filename: path-like name of the .jsonl file.
+        """
+        path = Path(filename)
+        if not path.suffix:
+            path = path.with_suffix(".jsonl")
+
+        with path.open("a") as f:
+            json.dump(self.data, f)
+            f.write("\n")
+
+    def everything(self):
+        # first validate against schema
+        if not self.validate():
+            raise jsonschema.ValidationError("The data is not valid against the schema.")
+        # sort data for readability/quality of life
+        self.sort_data()
+        # then add missing fields
+        self.all_adds()
+        # then check that everything is correct
+        self.all_checks()
+        # TODO: validate against schema again?
+        return True
+
+
+class CausallySecuredScenario(CausalContextualityScenario):
+    """Subclass for causal contextuality scenarios convertible to spacetime games.
+
+    Requires unique causal bridges, no cycles, a causally secured cover,
+    and clean local covers.
+    """
+
+    def _get_transitive_enabling(self, measurement_name):
+        """Compute the transitive closure of enabling events for a measurement.
+
+        Returns:
+            a dictionary mapping measurement names to their required outcome values.
+        """
+        closure = dict()
+        queue = deque([measurement_name])
+        seen = set()
+
+        while queue:
+            current = queue.popleft()
+            if current in seen:
+                continue
+            seen.add(current)
+
+            # NOTE: this assumes unique causal bridges
+            enabling_relations = self.measurements[current]["e"]
+            if not enabling_relations:
+                continue
+
+            for event in enabling_relations[0]:
+                parent_m, parent_v = event.values()
+
+                if parent_m in closure and closure[parent_m] != parent_v:
+                    # internally inconsistent scenario (unused setting)
+                    return None
+
+                closure[parent_m] = parent_v
+                queue.append(parent_m)
+
+        return closure
+
+    def check_causally_secured_cover(self):
+        """Verify that the cover is causally secured.
+
+        This means facet membership propagates to all enabling measurements,
+        two measurements with inconsistent enabling conditions never belong to the same facet,
+        and C is the maximum among all covers C′ that have the same local cover restrictions.
+        """
+        # precompute transitive closures for all measurements
+        tau_bars = dict()
+        for m in self.measurements:
+            t_bar = self._get_transitive_enabling(m)
+            if t_bar is None:
+                return False
+            tau_bars[m] = t_bar
+
+        for facet in self.cover:
+            # 1) propagation: ∀C' ∈ C, ∀x ∈ C, support(τ(x)) ⊆ C'
+            for x in facet:
+                enabling_relations = self.measurements[x]["e"]
+                if not enabling_relations:
+                    continue
+                support = set(event["m"] for event in enabling_relations[0])
+                if not support <= facet:
+                    return False
+
+            # 2) consistency: (τ_bar(x) ∪ τ_bar(y)) must be consistent for all x, y in C
+            facet_list = list(facet)
+            for i, x in enumerate(facet_list):
+                for y in facet_list[i + 1 :]:
+                    t_x, t_y = tau_bars[x], tau_bars[y]
+                    # check for conflicting assignments in the transitive history
+                    common_parents = set(t_x.keys()) & set(t_y.keys())
+                    if any(t_x[p] != t_y[p] for p in common_parents):
+                        return False
+
+        # 3) maximality: this is verified by the anti-chain check
+        return True
+
+    def check_local_covers_clean(self):
+        """Verify that all local covers are clean.
+
+        No local cover restriction should separate measurements that collectively serve as an
+        enabling condition for a downstream measurement. For example, if ∅ ⊢ X, Y and
+        {(X,0),(Y,0)} ⊢ Z, then the local cover C_∅ = {{X}, {Y}} would be deemed 'unclean'
+        (or 'dirty'), and the only possible clean local cover would be C_∅ = {X, Y}.
+        """
+        # map each bridge to the measurements it enables
+        enabled_by_bridge = defaultdict(list)
+        for name, measurement in self.measurements.items():
+            enabling_relations = measurement["e"]
+            if enabling_relations:
+                bridge = frozenset(tuple(event.values()) for event in enabling_relations[0])
+            else:
+                bridge = frozenset()
+            enabled_by_bridge[bridge].append(name)
+
+        # for every measurement z, check if its enabling bridge t_z
+        # is realizable in the local cover of its own parents
+        for z, measurement in self.measurements.items():
+            enabling_relations = measurement["e"]
+            if not enabling_relations:
+                continue
+
+            t_z = enabling_relations[0]
+            support_z = set(event["m"] for event in t_z)
+
+            # group support_z by the bridges that enable them
+            support_by_parent_bridge = defaultdict(set)
+            for name in support_z:
+                enabling_relations = self.measurements[name]["e"]
+                if enabling_relations:
+                    m_bridge = frozenset(tuple(event.values()) for event in enabling_relations[0])
+                else:
+                    m_bridge = frozenset()
+                support_by_parent_bridge[m_bridge].add(name)
+
+            for parent_bridge, sub_support in support_by_parent_bridge.items():
+                # compute local cover C_t at the parent level
+                # C_t = {C' ∩ enabled(t) | C' ∈ C} \ {∅}
+                enabled_at_parent = set(enabled_by_bridge[parent_bridge])
+                local_contexts = [
+                    frozenset(context & enabled_at_parent)
+                    for context in self.cover
+                    if (context & enabled_at_parent)
+                ]
+
+                # clean check: sub_support must be a subset of at least one local context,
+                # (sub_support split across local contexts => z can never be enabled => not clean)
+                if not any(sub_support <= context for context in local_contexts):
+                    return False
+
+        return True
+
+    # TODO: make sure that this one is run first in all_checks to fail fast instead of doing the
+    # expensive checks above (causally secured cover and clean local covers)
     def check_unique_causal_bridges(self):
         """Check that the scenario only has unique causal bridges.
 
@@ -361,7 +539,7 @@ class CausalContextualityScenario:
 
             # compare every pair of enabling relations for this measurement
             for i, rel1 in enumerate(enabling_relations):
-                for j, rel2 in enumerate(enabling_relations[i + 1 :], start=i + 1):
+                for rel2 in enabling_relations[i + 1 :]:
                     # empty set enablings conflict with everything
                     if not rel1 or not rel2:
                         return False
@@ -674,7 +852,7 @@ class CausalContextualityScenario:
                 if not possible:
                     continue
 
-                # Alfred nodes for the same measuremnt lead to the same Bob node
+                # Alfred nodes for the same measurement lead to the same Bob node
                 # because they correspond to the same measurement and the same causal bridge
                 parents = []
                 for alfred_measurement_nodes, (_, ant_value) in zip(candidate_lists, antecedents):
@@ -742,46 +920,3 @@ class CausalContextualityScenario:
             "as": list(actions),
             "is": info_sets,
         }
-
-    def to_json(self, filename, indent=None):
-        """Flush data to a JSON file.
-
-        Args:
-            filename: path-like name of the output file.
-        """
-        path = Path(filename)
-        if not path.suffix:
-            path = path.with_suffix(".json")
-
-        with path.open("w") as f:
-            json.dump(self.data, f, indent=indent)
-
-    def append_to_json_lines(self, filename):
-        """Append the CCS data to a JSON Lines file.
-
-        Creates the file if it does not already exist. Each call writes
-        one JSON object on a single line.
-
-        Args:
-            filename: path-like name of the .jsonl file.
-        """
-        path = Path(filename)
-        if not path.suffix:
-            path = path.with_suffix(".jsonl")
-
-        with path.open("a") as f:
-            json.dump(self.data, f)
-            f.write("\n")
-
-    def everything(self):
-        # first validate against schema
-        if not self.validate():
-            raise jsonschema.ValidationError("The data is not valid against the schema.")
-        # sort data for readability/quality of life
-        self.sort_data()
-        # then add missing fields
-        self.all_adds()
-        # then check that everything is correct
-        self.all_checks()
-        # TODO: validate against schema again?
-        return True
