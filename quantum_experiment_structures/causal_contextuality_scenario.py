@@ -121,9 +121,9 @@ class CausalContextualityScenario:
     def add_leaves(self):
         """Add the leaf field to all measurement outcomes in the CCS.
 
-        Note that this will overwrite any existing leaf-fields.
+        Note that this will not overwrite any existing leaf-fields.
         """
-        self._handle_leaves(True)
+        self._handle_leaves(False)
 
     def check_leaves(self):
         """Check all measurement outcomes' leaves for correctness; otherwise raise error.
