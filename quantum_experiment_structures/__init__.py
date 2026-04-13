@@ -9,7 +9,10 @@ from .causal_contextuality_scenario import (  # noqa: F401
     CausallySecuredScenario,
 )
 from .generator import CCSGenerator  # noqa: F401
-from .spacetime_game import SpacetimeGame  # noqa: F401
+from .spacetime_game import (  # noqa: F401
+    SpacetimeGame,
+    AlternatingSpacetimeGame,
+)
 
 # subpackage
 from . import data  # noqa: F401

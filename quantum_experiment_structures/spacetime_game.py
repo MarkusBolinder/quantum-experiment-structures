@@ -54,8 +54,8 @@ class SpacetimeGame:
         # NOTE: this will add create adjacency lists for parents that are not listed as nodes,
         # but this will be checked by one of the checking methods anyway, so it should be fine
         self.adj = defaultdict(list)
-        for node_name, info in self.nodes.items():
-            for p in info["node_data"]["ps"]:
+        for node_name, node_info in self.nodes.items():
+            for p in node_info["node_data"]["ps"]:
                 parent, action = p.values()
                 self.adj[parent].append({"c": node_name, "a": action})
 
@@ -209,8 +209,8 @@ class SpacetimeGame:
                     )
 
             # 2) totality: if a measurement is enabled by the current history, it must be present
-            for node_name, info in self.nodes.items():
-                parents = info["node_data"]["ps"]
+            for node_name, node_info in self.nodes.items():
+                parents = node_info["node_data"]["ps"]
 
                 # check if this specific node is enabled by the assignments
                 if all(
@@ -219,7 +219,7 @@ class SpacetimeGame:
                     and mapping[self.nodes[p["p"]]["info_set_id"]] == p["a"]
                     for p in parents
                 ):
-                    target_iset = info["info_set_id"]
+                    target_iset = node_info["info_set_id"]
                     if target_iset not in active_isets:
                         raise ValueError(
                             f"Totality violation in {context_label}: measurement '{target_iset}' "
@@ -800,4 +800,218 @@ class SpacetimeGame:
         self.all_adds()
         # then check that everything is correct
         self.all_checks()
+        return True
+
+
+class AlternatingSpacetimeGame(SpacetimeGame):
+    """Subclass of SpacetimeGame enforcing alternating game properties.
+
+    An alternating spacetime game G satisfies the following properties:
+        2-PLAYERS
+            It has two players (we call them Alfred, who is nature, and Bob, who is the observer).
+        BIPARTITE
+            The graph (N ,R) always connects a node played by Alfred to a node played
+            by Bob, or a node played by Bob to a node played by Alfred. In other words,
+            the graph structure of the spacetime game is a bipartite graph if we ignore
+            the direction of the edges.
+        EVEN
+            All root nodes are played by Bob. All leaf nodes are played by Alfred.
+        BOB-S
+            All information sets played by Bob are singletons. It means Bob is fully
+            informed about decisions in his causal past, even in situations in which he
+            can carry out the same experiment under different circumstances.
+        BOB-A
+            At any of Bob’s nodes, all available actions are used on at least one edge.
+                ∀t ∈ N_B ,∀C ∈ χ(t),∃n ∈ N_A,σ(t,n)= C
+        BA1
+            Each node played by Alfred has exactly one parent node:
+                ∀n ∈ N_A,∃!t ∈ N_B ,t ⌣ n
+        BA2
+            Given a node N played by Bob, two nodes (played by Alfred) connected
+            to N with the same label (it is a measurement context) must be in different
+            information sets (these are measurement settings). In other words, distinct
+            nodes for the same measurement in the same context would be superfluous.
+                ∀t ∈ N_B ,∀n,m ∈ successors(t),σ(t,n)= σ(t,m) ⇒ ι(n) ̸= ι(m)
+        BA3
+            Given a node played by Bob, two different outgoing labels cannot point to
+            the exact same information sets.
+                ∀t ∈ N_B ,∀C_1,C_2 ∈ χ(t),{ι(n)|σ(t,n)= C_1} = {ι(n)|σ(t,n)= C_2} ⇒ C_1 = C_2
+        AB1
+            All nodes in the same information set played by Alfred15 have the same
+            outgoing edges: same labels, same destination nodes. In other words, the
+            causal future of a measurement does not depend on the context in which it
+            was carried out.
+                ∀x ∈ I_A,∀n,m ∈ x,successors(n)= successors(m)
+                ∀x ∈ I_A,∀n,m ∈ x,∀u ∈ successors(x),σ(n,u)= σ(m,u)
+        AB2
+            Two distinct nodes played by Bob cannot have the same causal bridge.
+                ∀t,u ∈ N_B,
+                (predecessors(t)=predecessors(u) ∧ ∀n ∈ predecessors(t),σ(n,t)= σ(n,u)) ⇒ t = u.
+
+        Definition from:
+            Fourny, G. Spacetime Games Subsume Causal Contextuality Scenarios.
+            Int J Theor Phys 65, 95 (2026). https://doi.org/10.1007/s10773-026-06295-4
+    """
+
+    def __init__(self, json_data):
+        super().__init__(json_data)
+        self.bob_player = None
+        self.alfred_player = None
+        self._identify_players()
+
+    def _identify_players(self):
+        """Identify which player is Bob (roots) and which is Alfred (leaves)."""
+        if len(self.players) != 2:
+            return  # check_2_players will catch this
+
+        for node_info in self.nodes.values():
+            # root: no parents
+            if not node_info["node_data"]["ps"]:
+                self.bob_player = node_info["player"]
+                break
+        # NOTE: this code assumes two players
+        self.alfred_player = list(self.players - set([self.bob_player]))[0]
+
+    def check_2_players(self):
+        """Check that the game has exactly two players."""
+        return len(self.players) == 2
+
+    def check_bipartite(self):
+        """Verify that the spacetime game DAG is bipartite with respect to the players.
+
+        All Alfred nodes connect to Bob nodes and vice versa.
+        """
+        for name, node_info in self.nodes.items():
+            current_player = node_info["player"]
+            for edge in self.adj.get(name, []):
+                child_player = self.nodes[edge["c"]]["player"]
+                if current_player == child_player:
+                    return False
+        return True
+
+    def check_roots_and_leaves(self):
+        """Ensure all roots are Bob; all leaves are Alfred."""
+        for name, node_info in self.nodes.items():
+            # check roots
+            if not node_info["node_data"]["ps"] and node_info["player"] != self.bob_player:
+                return False
+            # check leaves
+            if name not in self.adj and node_info["player"] != self.alfred_player:
+                return False
+        return True
+
+    def check_singleton_bob_info_sets(self):
+        """Check that all Bob's information sets are singletons."""
+        for iset in self.info_sets.values():
+            if iset["p"] == self.bob_player and len(iset["ns"]) != 1:
+                return False
+        return True
+
+    def check_bob_a(self):
+        """Check that all Bob actions available are played (label of some edge)."""
+        for name, node_info in self.nodes.items():
+            if node_info["player"] == self.bob_player:
+                iset = self.info_sets[node_info["info_set_id"]]
+                available_actions = set(iset["a"])
+                used_actions = set(edge["a"] for edge in self.adj.get(name, []))
+                if available_actions != used_actions:
+                    return False
+        return True
+
+    def check_ba1(self):
+        """Ensure each Alfred node has exactly one parent node."""
+        for node_info in self.nodes.values():
+            if node_info["player"] == self.alfred_player:
+                if len(node_info["node_data"]["ps"]) != 1:
+                    return False
+        return True
+
+    def check_ba2(self):
+        """Verify property BA2 of the alternating game category."""
+        for name, node_info in self.nodes.items():
+            if node_info["player"] == self.bob_player:
+                # map action label to set of info set ids
+                action_to_isets = defaultdict(list)
+                for edge in self.adj.get(name, []):
+                    child_iset = self.nodes[edge["c"]]["info_set_id"]
+                    action_to_isets[edge["a"]].append(child_iset)
+
+                for iset_list in action_to_isets.values():
+                    if len(iset_list) != len(set(iset_list)):
+                        return False
+        return True
+
+    def check_ba3(self):
+        """Ensure different outgoing labels from Bob must point to different information sets."""
+        for name, node_info in self.nodes.items():
+            if node_info["player"] == self.bob_player:
+                # map action label to frozen set of child info set ids
+                label_to_isets = defaultdict(set)
+                for edge in self.adj.get(name, []):
+                    action = edge["a"]
+                    child_iset = self.nodes[edge["c"]]["info_set_id"]
+                    label_to_isets[action].add(child_iset)
+                label_to_isets_set = {
+                    label: frozenset(isets) for label, isets in label_to_isets.items()
+                }
+
+                # check that distinct labels point to distinct sets
+                seen_sets = set()
+                for label_set in label_to_isets_set.values():
+                    if label_set in seen_sets:
+                        return False
+                    seen_sets.add(label_set)
+        return True
+
+    def check_ab1(self):
+        """Check that nodes in the same Alfred info set have identical outgoing edges."""
+        for iset in self.info_sets.values():
+            if iset["p"] == self.alfred_player:
+                nodes_in_set = [n["n"] for n in iset["ns"]]
+                if not nodes_in_set:
+                    continue
+
+                # Use the first node as the reference
+                ref_node = nodes_in_set[0]
+                ref_edges = set(tuple(edge.values()) for edge in self.adj.get(ref_node, []))
+
+                for other_node in nodes_in_set[1:]:
+                    other_edges = set(tuple(edge.values()) for edge in self.adj.get(other_node, []))
+                    if ref_edges != other_edges:
+                        return False
+        return True
+
+    def check_ab2(self):
+        """Verify that the game has unique causal bridges."""
+        bob_nodes = [
+            name for name, node_info in self.nodes.items() if node_info["player"] == self.bob_player
+        ]
+        bridges = set()
+        for node in bob_nodes:
+            # a bridge is the set of (parent_node, action)
+            bridge = frozenset(
+                tuple(parent.values()) for parent in self.nodes[node]["node_data"]["ps"]
+            )
+            if bridge in bridges:
+                return False
+            bridges.add(bridge)
+        return True
+
+    def check_even_height(self):
+        """Check that every Alfred node has even height and every Bob node has odd height."""
+        leaves = set(self.nodes) - set(node for node, data in self.adj.items() if data)
+        seen = {leaf: 0 for leaf in leaves}
+
+        def get_height(node):
+            if node in seen:
+                # NOTE: this will cover the leaves too, since they have already been added
+                return seen[node]
+            res = 1 + max(get_height(edge["c"]) for edge in self.adj[node])
+            seen[node] = res
+            return res
+
+        for name, node_info in self.nodes.items():
+            parity = 0 if node_info["player"] == self.alfred_player else 1
+            if get_height(name) % 2 != parity:
+                return False
         return True
