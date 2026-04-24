@@ -1,8 +1,10 @@
 """Validate a JSON representation of a CCS using both a schema and additional consistency checks."""
 
 from collections import defaultdict, deque
+import copy
 from dataclasses import dataclass
 import inspect
+from itertools import product
 import json
 from pathlib import Path
 
@@ -384,7 +386,293 @@ class CausalContextualityScenario:
         return True
 
 
-class CausallySecuredScenario(CausalContextualityScenario):
+class StableCausalContextualityScenario(CausalContextualityScenario):
+    @staticmethod
+    def _dedupe_preserve_order(items):
+        """Remove duplicates while preserving the original order.
+
+        Args:
+            items: An iterable of hashable items.
+
+        Returns:
+            A list containing the unique items from 'items', in their first observed order.
+        """
+        seen = set()
+        result = []
+        for item in items:
+            if item not in seen:
+                seen.add(item)
+                result.append(item)
+        return result
+
+    def _topological_order(self):
+        """Create a topological order of the measurements.
+
+        The scenario is assumed to be acyclic. The order is used so that parent
+        measurements are always processed before their children.
+
+        Returns:
+            A list of measurement names in topological order.
+
+        Raises:
+            ValueError: If the enabling relations contain a cycle.
+        """
+        indegree = {measurement: 0 for measurement in self.measurements}
+        adjacency = defaultdict(set)
+
+        for measurement in self.data["ms"]:
+            child = measurement["m"]
+            for enabling_relation in measurement["e"]:
+                for event in enabling_relation:
+                    parent = event["m"]
+                    if child not in adjacency[parent]:
+                        adjacency[parent].add(child)
+                        indegree[child] += 1
+
+        queue = deque(sorted(node for node, degree in indegree.items() if degree == 0))
+        order = []
+
+        while queue:
+            node = queue.popleft()
+            order.append(node)
+
+            for child in sorted(adjacency[node]):
+                indegree[child] -= 1
+                if indegree[child] == 0:
+                    queue.append(child)
+
+        if len(order) != len(self.measurements):
+            raise ValueError("The enabling relations contain a cycle.")
+
+        return order
+
+    def _measurement_is_stable(self, measurement_name):
+        """Check whether a measurement can be safely duplicated.
+
+        A measurement is considered stable if no facet of the cover can realize two
+        different enabling relations for that measurement at the same time.
+
+        This is used by the duplication routine -- if two bridges can coexist inside one facet,
+        then the split would be ambiguous and should not be done.
+
+        Args:
+            measurement_name: name of the measurement to test.
+
+        Returns:
+            True if the measurement is stable; False if not.
+        """
+        enabling_relations = self.measurements[measurement_name]["e"]
+
+        # trivially stable if there is no ambiguity
+        if len(enabling_relations) <= 1:
+            return True
+
+        supports = [
+            frozenset(event["m"] for event in enabling_relation)
+            for enabling_relation in enabling_relations
+        ]
+
+        # NOTE: because the local covers consist of subsets of the global contexts, it should be
+        # sufficient to check if the support is a subset of the global contexts
+        for facet in self.cover:
+            compatible = [i for i, support in enumerate(supports) if support <= facet]
+
+            # if a single facet can enable more than one bridge, then the measurement is unstable
+            if len(compatible) > 1:
+                return False
+
+        return True
+
+    def check_stability(self):
+        """Check that the scenario is stable.
+
+        A measurement is trivially stable if it has a unique causal bridge. If the measurement has
+        multiple causal bridges, i.e. multiple enabling relations, it is stable if only one causal
+        bridge can be realized in a history. This will depend on the local context and the events in
+        the causal bridges. For example, if ∅ ⊢ ∅ ⊢ X,Y and {(X,0)} ⊢ Z, {(Y,1)} ⊢ Z and the cover
+        is {{X,Y,Z}} it is not stable, because both the enabling relations can be active at the same
+        time, but if we have the cover  {{X,Z},{Y,Z}} it is stable because only one causal bridge
+        can be active. Stability implies a notion of measurements that correspond to different
+        physical entities, i.e. in the example (with the cover that gives stability) if we have the
+        event (X,0), the Z we enable is physically different from the Z we enable by the event
+        (Y,1), but if we do not have stability, i.e. the cover {{X,Y,Z}}, the causal bridges lead to
+        same physical measurement Z.
+        """
+        for measurement in self.measurements:
+            if not self._measurement_is_stable(measurement):
+                raise ValueError(
+                    f"Measurement '{measurement}' is unstable and cannot be duplicated "
+                    "because more than one enabling relation can occur in the same facet."
+                )
+        return True
+
+    def deduplicate_causal_bridges(self):
+        """Duplicate measurements until all causal bridges are unique.
+
+        If a measurement has multiple causal bridges, which hinders it from being converted to a
+        spacetime game immediately, it may still be possible to duplicate the measurements with
+        multiple enabling relations, such that every copy only has one enabling relation (i.e. we
+        have a new scenario with unique causal bridges). This is only possible if the enabling
+        relations are stable, meaning that only one causal bridge can be activated given the
+        contexts available in the scenario. If the bridge is unstable, then we could follow two or
+        more enabling relations at the same time, which pollutes the causal history, since we cannot
+        know which causal bridge enabled the measurement.
+
+        The method unfolds the scenario by creating one copy for every stable enabling relation.
+        The duplication is propagated recursively through the causal structure, and the cover is
+        modified to include the duplicates.
+
+        If a measurement has several enabling relations, the method first checks that those
+        relations are stable with respect to the cover. More formally, stability means that no
+        facet can realize two different enabling relations for the same measurement at the same
+        time. If such ambiguity exists, the measurement cannot be split and the method raises an
+        error.
+
+        This method assumes that all measurements are stable.
+
+        Returns:
+            A new scenario object of the same class, with unique causal bridges.
+
+        Raises:
+            ValueError: if the scenario contains a cycle
+        """
+        topo_order = self._topological_order()
+        # create the duplicated measurements
+        #
+        # copy_records_by_original[m] is a list of duplicated measurements for m
+        # each record stores:
+        #   - name: the new measurement name
+        #   - original: the original measurement name
+        #   - parents: the concrete copied parent names used to enable it
+        #   - relation: the original enabling relation index
+        copy_records_by_original = defaultdict(list)
+        copy_lookup = dict()
+
+        def make_copy_name(original_name, index):
+            """Create a short, deterministic copy name.
+
+            The original name is kept for the first copy. Subsequent copies use a
+            numbered suffix.
+            """
+            if index == 0:
+                return original_name
+            return f"{original_name}_{index}"
+
+        for measurement_name in topo_order:
+            measurement = self.measurements[measurement_name]
+            outcomes = copy.deepcopy(measurement["o"])
+            enabling_relations = measurement["e"]
+
+            # root measurements, or measurements with a single bridge, are copied
+            # once per compatible parent-copy combination
+            if not enabling_relations:
+                copy_name = make_copy_name(measurement_name, index=0)
+                copy_record = {
+                    "name": copy_name,
+                    "original": measurement_name,
+                    "parents": tuple(),
+                    "relation": None,
+                    "measurement": {
+                        "m": copy_name,
+                        "e": [],
+                        "o": outcomes,
+                    },
+                }
+                copy_records_by_original[measurement_name].append(copy_record)
+                copy_lookup[(measurement_name, None, tuple())] = copy_record
+                continue
+
+            for relation_index, enabling_relation in enumerate(enabling_relations):
+                parent_measurements = [event["m"] for event in enabling_relation]
+
+                # gather the created copies of each parent measurement
+                parent_copy_lists = [
+                    copy_records_by_original[parent_name] for parent_name in parent_measurements
+                ]
+
+                if any(not parent_copy_list for parent_copy_list in parent_copy_lists):
+                    raise ValueError(
+                        f"Measurement '{measurement_name}' cannot be duplicated because "
+                        f"one of its parents has not been expanded yet."
+                    )
+
+                # every combination of parent copies corresponds to a valid copy of the measurement
+                for parent_combo in product(*parent_copy_lists):
+                    parent_names = tuple(parent_copy["name"] for parent_copy in parent_combo)
+                    copy_name = make_copy_name(
+                        measurement_name,
+                        len(copy_records_by_original[measurement_name]),
+                    )
+
+                    copied_relation = [
+                        {
+                            "m": parent_copy["name"],
+                            "v": event["v"],
+                        }
+                        for parent_copy, event in zip(parent_combo, enabling_relation)
+                    ]
+
+                    copy_record = {
+                        "name": copy_name,
+                        "original": measurement_name,
+                        "parents": parent_names,
+                        "relation": relation_index,
+                        "measurement": {
+                            "m": copy_name,
+                            "e": [copied_relation],
+                            "o": outcomes,
+                        },
+                    }
+
+                    copy_records_by_original[measurement_name].append(copy_record)
+                    copy_lookup[(measurement_name, relation_index, parent_names)] = copy_record
+
+        # lift the cover: for each original facet, we select the unique compatible copy of every
+        # measurement that appears in that facet. Stability guarantees uniqueness
+        new_cover = []
+
+        for facet in self.cover:
+            chosen = dict()
+
+            for measurement_name in topo_order:
+                if measurement_name not in facet:
+                    continue
+
+                candidates = []
+
+                for copy_record in copy_records_by_original[measurement_name]:
+                    # admissible if all copied parents have already been chosen for this facet
+                    if set(copy_record["parents"]) <= set(chosen.values()):
+                        candidates.append(copy_record)
+
+                if len(candidates) != 1:
+                    raise ValueError(
+                        f"Could not lift facet '{sorted(facet)}' uniquely for measurement "
+                        f"'{measurement_name}'. Got the following candidate contexts: {candidates}."
+                    )
+
+                chosen[measurement_name] = candidates[0]["name"]
+
+            new_cover.append(sorted(chosen.values()))
+
+        new_cover = self._dedupe_preserve_order(tuple(context) for context in new_cover)
+        new_cover = [list(context) for context in new_cover]
+
+        # flatten the duplicated measurements
+        new_measurements = [
+            copy_record["measurement"]
+            for measurement_name in topo_order
+            for copy_record in copy_records_by_original[measurement_name]
+        ]
+
+        new_data = dict(self.data)
+        new_data["ms"] = new_measurements
+        new_data["c"] = new_cover
+
+        return self.__class__(new_data)
+
+
+class CausallySecuredScenario(StableCausalContextualityScenario):
     """Subclass for causal contextuality scenarios convertible to spacetime games.
 
     Requires unique causal bridges, no cycles, a causally secured cover,
@@ -601,24 +889,6 @@ class CausallySecuredScenario(CausalContextualityScenario):
         return True
 
     @staticmethod
-    def _dedupe_preserve_order(items):
-        """Remove duplicates while preserving the original order.
-
-        Args:
-            items: An iterable of hashable items.
-
-        Returns:
-            A list containing the unique items from 'items', in their first observed order.
-        """
-        seen = set()
-        result = []
-        for item in items:
-            if item not in seen:
-                seen.add(item)
-                result.append(item)
-        return result
-
-    @staticmethod
     def _value_label(value):
         """Convert an outcome value into a schema-safe string label.
 
@@ -682,16 +952,16 @@ class CausallySecuredScenario(CausalContextualityScenario):
         Naming convention of nodes:
             Bob node ids
                 The base form is:
-                    B:{} for the root Bob node
-                    B:{Y=0} for a Bob node whose enabling bridge is Y=0
+                    {} for the root Bob node
+                    {Y=0} for a Bob node whose enabling bridge is Y=0
 
             Alfred node ids
                 The form is:
-                    A:<bob-node-id>:<measurement>:<context>
+                    <measurement>_<context>
                 Example:
-                    A:B:{}:X:{X,Y}
+                    X_{X,Y}
                 This means:
-                    Alfred node reached from Bob root B:{}, measurement X, local context {X,Y}.
+                    Alfred node for measurement X, reached from Bob choosing context {X,Y}.
 
         Information set ids
             Bob:<node-id> for Bob singleton sets
@@ -771,7 +1041,7 @@ class CausallySecuredScenario(CausalContextualityScenario):
                 inside = ",".join(f"({m},{v})" for m, v in bridge)
                 bridge_str = "{" + inside + "}"
 
-            node_id = f"B:{bridge_str}"
+            node_id = bridge_str
 
             node = _BobNode(
                 n=node_id,
@@ -794,7 +1064,7 @@ class CausallySecuredScenario(CausalContextualityScenario):
                 return None
 
             alfred_by_signature.add(sig)
-            node_id = f"A:{measurement}_{context_label}"
+            node_id = f"{measurement}_{context_label}"
             node = _AlfredNode(
                 n=node_id,
                 bob=bob_node_id,
