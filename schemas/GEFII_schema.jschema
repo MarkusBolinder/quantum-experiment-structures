@@ -1,0 +1,46 @@
+{
+    "$schema": "http://json-schema.org/draft-07/schema#",
+    "title": "Schema title",
+    "description": "GEFII schema",
+    "type": "object",
+    "properties": {
+        "Children": {
+            "type": "array",
+            "items": [
+                {
+                    "$ref": "http://json-schema.org/draft-07/schema#"
+                },
+                {
+                    "type": "object",
+                    "properties": {
+                        "payoffs": {
+                            "type": "array",
+                            "items": {
+                                "type": "integer"
+                            }
+                        },
+                        "kind": {
+                            "type": "string"
+                        }
+                    },
+                    "required": [
+                        "kind"
+                    ]
+                }
+            ]
+        },
+        "kind": {
+            "type": "string"
+        },
+        "information-set": {
+            "type": "integer"
+        },
+        "player": {
+            "type": "integer",
+            "minimum": 0
+        }
+    },
+    "required": [
+        "kind"
+    ]
+}
