@@ -1,0 +1,137 @@
+{
+    "$schema": "http://json-schema.org/draft-07/schema#",
+    "title": "Root object",
+    "description": "This schema describes the structure for representing an experiment using the process matrix framework.\n",
+    "type": "object",
+    "properties": {
+        "ProcessMatrixFramework": {
+            "type": "object",
+            "properties": {
+                "Labs": {
+                    "type": "array",
+                    "items": {
+                        "properties": {
+                            "Name": {"type": "string"},
+                            "Index": {
+                                "type": "integer",
+                                "minimum": 0
+                            },
+                            "NumberOfInQubits": {
+                                "type": "integer",
+                                "minimum": 0
+                            },
+                            "Measurements": {
+                                "type": "array",
+                                "items": {
+                                    "properties": {
+                                        "MeasurementAxisIndex": {
+                                            "type": "integer",
+                                            "minimum": 0
+                                        },
+                                        "CPMaps": {
+                                            "type": "array",
+                                            "items": {
+                                                "properties": {
+                                                    "MeasurementOutcomeIndex": {
+                                                        "type": "integer",
+                                                        "minimum": 0
+                                                    },
+                                                    "CPMap": {
+                                                        "type": "array",
+                                                        "items": {
+                                                            "type": "array",
+                                                            "items": {"type": "number"}
+                                                        }
+                                                    }
+                                                },
+                                                "required": [
+                                                    "CPMap",
+                                                    "MeasurementOutcomeIndex"
+                                                ]
+                                            },
+                                            "uniqueItems": true
+                                        }
+                                    },
+                                    "required": [
+                                        "MeasurementAxisIndex",
+                                        "CPMaps"
+                                    ]
+                                },
+                                "uniqueItems": true
+                            },
+                            "NumberOfOutQubits": {
+                                "type": "integer",
+                                "minimum": 0
+                            }
+                        },
+                        "required": [
+                            "Index",
+                            "Measurements",
+                            "NumberOfInQubits",
+                            "NumberOfOutQubits"
+                        ]
+                    },
+                    "uniqueItems": true,
+                    "minItems": 2,
+                    "contains": {
+                        "type": "object",
+                        "properties": {
+                            "Name": {
+                                "type": "string",
+                                "enum": [
+                                    "Start",
+                                    "End"
+                                ]
+                            },
+                            "Index": {
+                                "type": "integer",
+                                "enum": [
+                                    0,
+                                    1
+                                ]
+                            }
+                        }
+                    }
+                },
+                "Wires": {
+                    "type": "array",
+                    "items": {
+                        "properties": {
+                            "From": {
+                                "type": "object",
+                                "properties": {
+                                    "LabIdx": {"type": "integer"},
+                                    "OutQubitLocalIdx": {"type": "integer"}
+                                },
+                                "required": [
+                                    "LabIdx",
+                                    "OutQubitLocalIdx"
+                                ]
+                            },
+                            "To": {
+                                "type": "object",
+                                "properties": {
+                                    "LabIdx": {"type": "integer"},
+                                    "InQubitLocalIdx": {"type": "integer"}
+                                },
+                                "required": [
+                                    "LabIdx",
+                                    "InQubitLocalIdx"
+                                ]
+                            }
+                        },
+                        "required": [
+                            "From",
+                            "To"
+                        ]
+                    }
+                }
+            },
+            "required": [
+                "Wires",
+                "Labs"
+            ]
+        }
+    },
+    "required": ["ProcessMatrixFramework"]
+}

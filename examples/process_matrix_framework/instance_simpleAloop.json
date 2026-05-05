@@ -1,0 +1,96 @@
+{
+    "$schema": "PMF_schema.jschema",
+    "ProcessMatrixFramework": {
+        "Labs": [
+            {
+                "Name": "Start",
+                "Index": 0,
+                "NumberOfInQubits": 0,
+                "Measurements": [
+                    {
+                        "MeasurementAxisIndex": 0,
+                        "CPMaps": [
+                            {
+                                "MeasurementOutcomeIndex": 0,
+                                "CPMap": [
+                                    [0]
+                                ]
+                            }
+                        ]
+                    }
+                ],
+                "NumberOfOutQubits": 1
+            },
+            {
+                "Name": "A",
+                "Index": 2,
+                "NumberOfInQubits": 2,
+                "Measurements": [
+                    {
+                        "MeasurementAxisIndex": 0,
+                        "CPMaps": [
+                            {
+                                "MeasurementOutcomeIndex": 0,
+                                "CPMap": [
+                                    [0]
+                                ]
+                            }
+                        ]
+                    }
+                ],
+                "NumberOfOutQubits": 2
+            },
+            {
+                "Name": "End",
+                "Index": 1,
+                "NumberOfInQubits": 0,
+                "Measurements": [
+                    {
+                        "MeasurementAxisIndex": 0,
+                        "CPMaps": [
+                            {
+                                "MeasurementOutcomeIndex": 0,
+                                "CPMap": [
+                                    [0]
+                                ]
+                            }
+                        ]
+                    }
+                ],
+                "NumberOfOutQubits": 0
+            }
+        ],
+        "Wires": [
+            {
+                "From": {
+                    "LabIdx": 0,
+                    "OutQubitLocalIdx": 0
+                },
+                "To": {
+                    "LabIdx": 2,
+                    "InQubitLocalIdx": 0
+                }
+            },
+            {
+                "From": {
+                    "LabIdx": 2,
+                    "OutQubitLocalIdx": 0
+                },
+                "To": {
+                    "LabIdx": 1,
+                    "InQubitLocalIdx": 0
+                }
+            },
+            {
+                "From": {
+                    "LabIdx": 2,
+                    "OutQubitLocalIdx": 1
+                },
+                "To": {
+                    "LabIdx": 2,
+                    "InQubitLocalIdx": 1
+                }
+            }
+        ]
+    }
+}

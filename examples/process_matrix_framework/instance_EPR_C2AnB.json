@@ -1,0 +1,235 @@
+{
+    "$schema": "PMF_schema.jschema",
+    "ProcessMatrixFramework": {
+        "Labs": [
+            {
+                "Name": "Start",
+                "Index": 0,
+                "NumberOfInQubits": 0,
+                "Measurements": [
+                    {
+                        "MeasurementAxisIndex": 0,
+                        "CPMaps": [
+                            {
+                                "MeasurementOutcomeIndex": 0,
+                                "CPMap": [
+                                    [0]
+                                ]
+                            }
+                        ]
+                    }
+                ],
+                "NumberOfOutQubits": 1
+            },
+            {
+                "Name": "End",
+                "Index": 1,
+                "NumberOfInQubits": 2,
+                "Measurements": [
+                    {
+                        "MeasurementAxisIndex": 0,
+                        "CPMaps": [
+                            {
+                                "MeasurementOutcomeIndex": 0,
+                                "CPMap": [
+                                    [0]
+                                ]
+                            }
+                        ]
+                    }
+                ],
+                "NumberOfOutQubits": 0
+            },
+            {
+                "Name": "Alice",
+                "Index": 2,
+                "NumberOfInQubits": 1,
+                "Measurements": [
+                    {
+                        "MeasurementAxisIndex": 0,
+                        "CPMaps": [
+                            {
+                                "MeasurementOutcomeIndex": 0,
+                                "CPMap": [
+                                    [0.25,0.25],
+                                    [0.25,0.25]
+                                ]
+                            },
+                            {
+                                "MeasurementOutcomeIndex": 1,
+                                "CPMap": [
+                                    [0.25,-0.25],
+                                    [-0.25,0.25]
+                                ]
+                            }
+                        ]
+                    },
+                    {
+                        "MeasurementAxisIndex": 1,
+                        "CPMaps": [
+                            {
+                                "MeasurementOutcomeIndex": 0,
+                                "CPMap": [
+                                    [1,0],
+                                    [0,0]
+                                ]
+                            },
+                            {
+                                "MeasurementOutcomeIndex": 1,
+                                "CPMap": [
+                                    [0,0],
+                                    [0,1]
+                                ]
+                            }
+                        ]
+                    }
+                ],
+                "NumberOfOutQubits": 1
+            },
+            {
+                "Name": "Bob",
+                "Index": 3,
+                "NumberOfInQubits": 1,
+                "Measurements": [
+                    {
+                        "MeasurementAxisIndex": 0,
+                        "CPMaps": [
+                            {
+                                "MeasurementOutcomeIndex": 0,
+                                "CPMap": [
+                                    [0.25,0.25],
+                                    [0.25,0.25]
+                                ]
+                            },
+                            {
+                                "MeasurementOutcomeIndex": 1,
+                                "CPMap": [
+                                    [0.25,-0.25],
+                                    [-0.25,0.25]
+                                ]
+                            }
+                        ]
+                    },
+                    {
+                        "MeasurementAxisIndex": 1,
+                        "CPMaps": [
+                            {
+                                "MeasurementOutcomeIndex": 0,
+                                "CPMap": [
+                                    [1,0],
+                                    [0,0]
+                                ]
+                            },
+                            {
+                                "MeasurementOutcomeIndex": 1,
+                                "CPMap": [
+                                    [0,0],
+                                    [0,1]
+                                ]
+                            }
+                        ]
+                    }
+                ],
+                "NumberOfOutQubits": 1
+            },
+            {
+                "Name": "Chris",
+                "Index": 4,
+                "NumberOfInQubits": 1,
+                "Measurements": [
+                    {
+                        "MeasurementAxisIndex": 0,
+                        "CPMaps": [
+                            {
+                                "MeasurementOutcomeIndex": 0,
+                                "CPMap": [
+                                    [0.25,0.25],
+                                    [0.25,0.25]
+                                ]
+                            },
+                            {
+                                "MeasurementOutcomeIndex": 1,
+                                "CPMap": [
+                                    [0.25,-0.25],
+                                    [-0.25,0.25]
+                                ]
+                            }
+                        ]
+                    },
+                    {
+                        "MeasurementAxisIndex": 1,
+                        "CPMaps": [
+                            {
+                                "MeasurementOutcomeIndex": 0,
+                                "CPMap": [
+                                    [1,0],
+                                    [0,0]
+                                ]
+                            },
+                            {
+                                "MeasurementOutcomeIndex": 1,
+                                "CPMap": [
+                                    [0,0],
+                                    [0,1]
+                                ]
+                            }
+                        ]
+                    }
+                ],
+                "NumberOfOutQubits": 2
+            }
+        ],
+        "Wires": [
+            {
+                "From": {
+                    "LabIdx": 0,
+                    "OutQubitLocalIdx": 0
+                },
+                "To": {
+                    "LabIdx": 4,
+                    "InQubitLocalIdx": 0
+                }
+            },
+            {
+                "From": {
+                    "LabIdx": 4,
+                    "OutQubitLocalIdx": 0
+                },
+                "To": {
+                    "LabIdx": 2,
+                    "InQubitLocalIdx": 0
+                }
+            },
+            {
+                "From": {
+                    "LabIdx": 4,
+                    "OutQubitLocalIdx": 1
+                },
+                "To": {
+                    "LabIdx": 3,
+                    "InQubitLocalIdx": 0
+                }
+            },
+            {
+                "From": {
+                    "LabIdx": 3,
+                    "OutQubitLocalIdx": 0
+                },
+                "To": {
+                    "LabIdx": 1,
+                    "InQubitLocalIdx": 0
+                }
+            },
+            {
+                "From": {
+                    "LabIdx": 2,
+                    "OutQubitLocalIdx": 0
+                },
+                "To": {
+                    "LabIdx": 1,
+                    "InQubitLocalIdx": 1
+                }
+            }
+        ]
+    }
+}
