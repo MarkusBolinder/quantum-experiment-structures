@@ -1,0 +1,169 @@
+{
+    "children": [
+        {
+            "children": [
+                {
+                    "children": [
+                        {
+                            "children": [
+                                {
+                                    "payoffs": 0,
+                                    "kind": "outcome"
+                                },
+                                {
+                                    "payoffs": 1,
+                                    "kind": "outcome"
+                                }
+                            ],
+                            "kind": "choice",
+                            "information-set": 4,
+                            "player": 3
+                        },
+                        {
+                            "children": [
+                                {
+                                    "payoffs": 2,
+                                    "kind": "outcome"
+                                },
+                                {
+                                    "payoffs": 3,
+                                    "kind": "outcome"
+                                }
+                            ],
+                            "kind": "choice",
+                            "information-set": 5,
+                            "player": 3
+                        }
+                    ],
+                    "kind": "choice",
+                    "information-set": 3,
+                    "player": 2
+                },
+                {
+                    "children": [
+                        {
+                            "children": [
+                                {
+                                    "payoffs": 4,
+                                    "kind": "outcome"
+                                },
+                                {
+                                    "payoffs": 5,
+                                    "kind": "outcome"
+                                }
+                            ],
+                            "kind": "choice",
+                            "information-set": 4,
+                            "player": 3
+                        },
+                        {
+                            "children": [
+                                {
+                                    "payoffs": 6,
+                                    "kind": "outcome"
+                                },
+                                {
+                                    "payoffs": 7,
+                                    "kind": "outcome"
+                                }
+                            ],
+                            "kind": "choice",
+                            "information-set": 5,
+                            "player": 3
+                        }
+                    ],
+                    "kind": "choice",
+                    "information-set": 3,
+                    "player": 2
+                }
+            ],
+            "kind": "choice",
+            "information-set": 1,
+            "player": 1
+        },
+        {
+            "children": [
+                {
+                    "children": [
+                        {
+                            "children": [
+                                {
+                                    "payoffs": 8,
+                                    "kind": "outcome"
+                                },
+                                {
+                                    "payoffs": 9,
+                                    "kind": "outcome"
+                                }
+                            ],
+                            "kind": "choice",
+                            "information-set": 4,
+                            "player": 3
+                        },
+                        {
+                            "children": [
+                                {
+                                    "payoffs": 10,
+                                    "kind": "outcome"
+                                },
+                                {
+                                    "payoffs": 11,
+                                    "kind": "outcome"
+                                }
+                            ],
+                            "kind": "choice",
+                            "information-set": 5,
+                            "player": 3
+                        }
+                    ],
+                    "kind": "choice",
+                    "information-set": 3,
+                    "player": 2
+                },
+                {
+                    "children": [
+                        {
+                            "children": [
+                                {
+                                    "payoffs": 12,
+                                    "kind": "outcome"
+                                },
+                                {
+                                    "payoffs": 13,
+                                    "kind": "outcome"
+                                }
+                            ],
+                            "kind": "choice",
+                            "information-set": 4,
+                            "player": 3
+                        },
+                        {
+                            "children": [
+                                {
+                                    "payoffs": 14,
+                                    "kind": "outcome"
+                                },
+                                {
+                                    "payoffs": 15,
+                                    "kind": "outcome"
+                                }
+                            ],
+                            "kind": "choice",
+                            "information-set": 5,
+                            "player": 3
+                        }
+                    ],
+                    "kind": "choice",
+                    "information-set": 3,
+                    "player": 2
+                }
+            ],
+            "kind": "choice",
+            "information-set": 2,
+            "player": 1
+        }
+    ],
+    "kind": "choice",
+    "information-set": 0,
+    "player": 0
+}

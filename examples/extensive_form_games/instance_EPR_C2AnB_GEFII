@@ -1,0 +1,697 @@
+{
+    "children": [
+        {
+            "children": [
+                {
+                    "children": [
+                        {
+                            "children": [
+                                {
+                                    "children": [
+                                        {
+                                            "children": [
+                                                {
+                                                    "payoffs": 0,
+                                                    "kind": "outcome"
+                                                },
+                                                {
+                                                    "payoffs": 1,
+                                                    "kind": "outcome"
+                                                }
+                                            ],
+                                            "kind": "choice",
+                                            "information-set": 13,
+                                            "player": 5
+                                        },
+                                        {
+                                            "children": [
+                                                {
+                                                    "payoffs": 2,
+                                                    "kind": "outcome"
+                                                },
+                                                {
+                                                    "payoffs": 3,
+                                                    "kind": "outcome"
+                                                }
+                                            ],
+                                            "kind": "choice",
+                                            "information-set": 13,
+                                            "player": 5
+                                        }
+                                    ],
+                                    "kind": "choice",
+                                    "information-set": 5,
+                                    "player": 4
+                                },
+                                {
+                                    "children": [
+                                        {
+                                            "children": [
+                                                {
+                                                    "payoffs": 4,
+                                                    "kind": "outcome"
+                                                },
+                                                {
+                                                    "payoffs": 5,
+                                                    "kind": "outcome"
+                                                }
+                                            ],
+                                            "kind": "choice",
+                                            "information-set": 15,
+                                            "player": 5
+                                        },
+                                        {
+                                            "children": [
+                                                {
+                                                    "payoffs": 6,
+                                                    "kind": "outcome"
+                                                },
+                                                {
+                                                    "payoffs": 7,
+                                                    "kind": "outcome"
+                                                }
+                                            ],
+                                            "kind": "choice",
+                                            "information-set": 15,
+                                            "player": 5
+                                        }
+                                    ],
+                                    "kind": "choice",
+                                    "information-set": 7,
+                                    "player": 4
+                                }
+                            ],
+                            "kind": "choice",
+                            "information-set": 3,
+                            "player": 3
+                        },
+                        {
+                            "children": [
+                                {
+                                    "children": [
+                                        {
+                                            "children": [
+                                                {
+                                                    "payoffs": 8,
+                                                    "kind": "outcome"
+                                                },
+                                                {
+                                                    "payoffs": 9,
+                                                    "kind": "outcome"
+                                                }
+                                            ],
+                                            "kind": "choice",
+                                            "information-set": 14,
+                                            "player": 5
+                                        },
+                                        {
+                                            "children": [
+                                                {
+                                                    "payoffs": 10,
+                                                    "kind": "outcome"
+                                                },
+                                                {
+                                                    "payoffs": 11,
+                                                    "kind": "outcome"
+                                                }
+                                            ],
+                                            "kind": "choice",
+                                            "information-set": 14,
+                                            "player": 5
+                                        }
+                                    ],
+                                    "kind": "choice",
+                                    "information-set": 6,
+                                    "player": 4
+                                },
+                                {
+                                    "children": [
+                                        {
+                                            "children": [
+                                                {
+                                                    "payoffs": 12,
+                                                    "kind": "outcome"
+                                                },
+                                                {
+                                                    "payoffs": 13,
+                                                    "kind": "outcome"
+                                                }
+                                            ],
+                                            "kind": "choice",
+                                            "information-set": 16,
+                                            "player": 5
+                                        },
+                                        {
+                                            "children": [
+                                                {
+                                                    "payoffs": 14,
+                                                    "kind": "outcome"
+                                                },
+                                                {
+                                                    "payoffs": 15,
+                                                    "kind": "outcome"
+                                                }
+                                            ],
+                                            "kind": "choice",
+                                            "information-set": 16,
+                                            "player": 5
+                                        }
+                                    ],
+                                    "kind": "choice",
+                                    "information-set": 8,
+                                    "player": 4
+                                }
+                            ],
+                            "kind": "choice",
+                            "information-set": 4,
+                            "player": 3
+                        }
+                    ],
+                    "kind": "choice",
+                    "information-set": 2,
+                    "player": 2
+                },
+                {
+                    "children": [
+                        {
+                            "children": [
+                                {
+                                    "children": [
+                                        {
+                                            "children": [
+                                                {
+                                                    "payoffs": 16,
+                                                    "kind": "outcome"
+                                                },
+                                                {
+                                                    "payoffs": 17,
+                                                    "kind": "outcome"
+                                                }
+                                            ],
+                                            "kind": "choice",
+                                            "information-set": 17,
+                                            "player": 5
+                                        },
+                                        {
+                                            "children": [
+                                                {
+                                                    "payoffs": 18,
+                                                    "kind": "outcome"
+                                                },
+                                                {
+                                                    "payoffs": 19,
+                                                    "kind": "outcome"
+                                                }
+                                            ],
+                                            "kind": "choice",
+                                            "information-set": 17,
+                                            "player": 5
+                                        }
+                                    ],
+                                    "kind": "choice",
+                                    "information-set": 5,
+                                    "player": 4
+                                },
+                                {
+                                    "children": [
+                                        {
+                                            "children": [
+                                                {
+                                                    "payoffs": 20,
+                                                    "kind": "outcome"
+                                                },
+                                                {
+                                                    "payoffs": 21,
+                                                    "kind": "outcome"
+                                                }
+                                            ],
+                                            "kind": "choice",
+                                            "information-set": 19,
+                                            "player": 5
+                                        },
+                                        {
+                                            "children": [
+                                                {
+                                                    "payoffs": 22,
+                                                    "kind": "outcome"
+                                                },
+                                                {
+                                                    "payoffs": 23,
+                                                    "kind": "outcome"
+                                                }
+                                            ],
+                                            "kind": "choice",
+                                            "information-set": 19,
+                                            "player": 5
+                                        }
+                                    ],
+                                    "kind": "choice",
+                                    "information-set": 7,
+                                    "player": 4
+                                }
+                            ],
+                            "kind": "choice",
+                            "information-set": 3,
+                            "player": 3
+                        },
+                        {
+                            "children": [
+                                {
+                                    "children": [
+                                        {
+                                            "children": [
+                                                {
+                                                    "payoffs": 24,
+                                                    "kind": "outcome"
+                                                },
+                                                {
+                                                    "payoffs": 25,
+                                                    "kind": "outcome"
+                                                }
+                                            ],
+                                            "kind": "choice",
+                                            "information-set": 18,
+                                            "player": 5
+                                        },
+                                        {
+                                            "children": [
+                                                {
+                                                    "payoffs": 26,
+                                                    "kind": "outcome"
+                                                },
+                                                {
+                                                    "payoffs": 27,
+                                                    "kind": "outcome"
+                                                }
+                                            ],
+                                            "kind": "choice",
+                                            "information-set": 18,
+                                            "player": 5
+                                        }
+                                    ],
+                                    "kind": "choice",
+                                    "information-set": 6,
+                                    "player": 4
+                                },
+                                {
+                                    "children": [
+                                        {
+                                            "children": [
+                                                {
+                                                    "payoffs": 28,
+                                                    "kind": "outcome"
+                                                },
+                                                {
+                                                    "payoffs": 29,
+                                                    "kind": "outcome"
+                                                }
+                                            ],
+                                            "kind": "choice",
+                                            "information-set": 20,
+                                            "player": 5
+                                        },
+                                        {
+                                            "children": [
+                                                {
+                                                    "payoffs": 30,
+                                                    "kind": "outcome"
+                                                },
+                                                {
+                                                    "payoffs": 31,
+                                                    "kind": "outcome"
+                                                }
+                                            ],
+                                            "kind": "choice",
+                                            "information-set": 20,
+                                            "player": 5
+                                        }
+                                    ],
+                                    "kind": "choice",
+                                    "information-set": 8,
+                                    "player": 4
+                                }
+                            ],
+                            "kind": "choice",
+                            "information-set": 4,
+                            "player": 3
+                        }
+                    ],
+                    "kind": "choice",
+                    "information-set": 2,
+                    "player": 2
+                }
+            ],
+            "kind": "choice",
+            "information-set": 1,
+            "player": 1
+        },
+        {
+            "children": [
+                {
+                    "children": [
+                        {
+                            "children": [
+                                {
+                                    "children": [
+                                        {
+                                            "children": [
+                                                {
+                                                    "payoffs": 32,
+                                                    "kind": "outcome"
+                                                },
+                                                {
+                                                    "payoffs": 33,
+                                                    "kind": "outcome"
+                                                }
+                                            ],
+                                            "kind": "choice",
+                                            "information-set": 13,
+                                            "player": 5
+                                        },
+                                        {
+                                            "children": [
+                                                {
+                                                    "payoffs": 34,
+                                                    "kind": "outcome"
+                                                },
+                                                {
+                                                    "payoffs": 35,
+                                                    "kind": "outcome"
+                                                }
+                                            ],
+                                            "kind": "choice",
+                                            "information-set": 13,
+                                            "player": 5
+                                        }
+                                    ],
+                                    "kind": "choice",
+                                    "information-set": 9,
+                                    "player": 4
+                                },
+                                {
+                                    "children": [
+                                        {
+                                            "children": [
+                                                {
+                                                    "payoffs": 36,
+                                                    "kind": "outcome"
+                                                },
+                                                {
+                                                    "payoffs": 37,
+                                                    "kind": "outcome"
+                                                }
+                                            ],
+                                            "kind": "choice",
+                                            "information-set": 15,
+                                            "player": 5
+                                        },
+                                        {
+                                            "children": [
+                                                {
+                                                    "payoffs": 38,
+                                                    "kind": "outcome"
+                                                },
+                                                {
+                                                    "payoffs": 39,
+                                                    "kind": "outcome"
+                                                }
+                                            ],
+                                            "kind": "choice",
+                                            "information-set": 15,
+                                            "player": 5
+                                        }
+                                    ],
+                                    "kind": "choice",
+                                    "information-set": 11,
+                                    "player": 4
+                                }
+                            ],
+                            "kind": "choice",
+                            "information-set": 3,
+                            "player": 3
+                        },
+                        {
+                            "children": [
+                                {
+                                    "children": [
+                                        {
+                                            "children": [
+                                                {
+                                                    "payoffs": 40,
+                                                    "kind": "outcome"
+                                                },
+                                                {
+                                                    "payoffs": 41,
+                                                    "kind": "outcome"
+                                                }
+                                            ],
+                                            "kind": "choice",
+                                            "information-set": 14,
+                                            "player": 5
+                                        },
+                                        {
+                                            "children": [
+                                                {
+                                                    "payoffs": 42,
+                                                    "kind": "outcome"
+                                                },
+                                                {
+                                                    "payoffs": 43,
+                                                    "kind": "outcome"
+                                                }
+                                            ],
+                                            "kind": "choice",
+                                            "information-set": 14,
+                                            "player": 5
+                                        }
+                                    ],
+                                    "kind": "choice",
+                                    "information-set": 10,
+                                    "player": 4
+                                },
+                                {
+                                    "children": [
+                                        {
+                                            "children": [
+                                                {
+                                                    "payoffs": 44,
+                                                    "kind": "outcome"
+                                                },
+                                                {
+                                                    "payoffs": 45,
+                                                    "kind": "outcome"
+                                                }
+                                            ],
+                                            "kind": "choice",
+                                            "information-set": 16,
+                                            "player": 5
+                                        },
+                                        {
+                                            "children": [
+                                                {
+                                                    "payoffs": 46,
+                                                    "kind": "outcome"
+                                                },
+                                                {
+                                                    "payoffs": 47,
+                                                    "kind": "outcome"
+                                                }
+                                            ],
+                                            "kind": "choice",
+                                            "information-set": 16,
+                                            "player": 5
+                                        }
+                                    ],
+                                    "kind": "choice",
+                                    "information-set": 12,
+                                    "player": 4
+                                }
+                            ],
+                            "kind": "choice",
+                            "information-set": 4,
+                            "player": 3
+                        }
+                    ],
+                    "kind": "choice",
+                    "information-set": 2,
+                    "player": 2
+                },
+                {
+                    "children": [
+                        {
+                            "children": [
+                                {
+                                    "children": [
+                                        {
+                                            "children": [
+                                                {
+                                                    "payoffs": 48,
+                                                    "kind": "outcome"
+                                                },
+                                                {
+                                                    "payoffs": 49,
+                                                    "kind": "outcome"
+                                                }
+                                            ],
+                                            "kind": "choice",
+                                            "information-set": 17,
+                                            "player": 5
+                                        },
+                                        {
+                                            "children": [
+                                                {
+                                                    "payoffs": 50,
+                                                    "kind": "outcome"
+                                                },
+                                                {
+                                                    "payoffs": 51,
+                                                    "kind": "outcome"
+                                                }
+                                            ],
+                                            "kind": "choice",
+                                            "information-set": 17,
+                                            "player": 5
+                                        }
+                                    ],
+                                    "kind": "choice",
+                                    "information-set": 9,
+                                    "player": 4
+                                },
+                                {
+                                    "children": [
+                                        {
+                                            "children": [
+                                                {
+                                                    "payoffs": 52,
+                                                    "kind": "outcome"
+                                                },
+                                                {
+                                                    "payoffs": 53,
+                                                    "kind": "outcome"
+                                                }
+                                            ],
+                                            "kind": "choice",
+                                            "information-set": 19,
+                                            "player": 5
+                                        },
+                                        {
+                                            "children": [
+                                                {
+                                                    "payoffs": 54,
+                                                    "kind": "outcome"
+                                                },
+                                                {
+                                                    "payoffs": 55,
+                                                    "kind": "outcome"
+                                                }
+                                            ],
+                                            "kind": "choice",
+                                            "information-set": 19,
+                                            "player": 5
+                                        }
+                                    ],
+                                    "kind": "choice",
+                                    "information-set": 11,
+                                    "player": 4
+                                }
+                            ],
+                            "kind": "choice",
+                            "information-set": 3,
+                            "player": 3
+                        },
+                        {
+                            "children": [
+                                {
+                                    "children": [
+                                        {
+                                            "children": [
+                                                {
+                                                    "payoffs": 56,
+                                                    "kind": "outcome"
+                                                },
+                                                {
+                                                    "payoffs": 57,
+                                                    "kind": "outcome"
+                                                }
+                                            ],
+                                            "kind": "choice",
+                                            "information-set": 18,
+                                            "player": 5
+                                        },
+                                        {
+                                            "children": [
+                                                {
+                                                    "payoffs": 58,
+                                                    "kind": "outcome"
+                                                },
+                                                {
+                                                    "payoffs": 59,
+                                                    "kind": "outcome"
+                                                }
+                                            ],
+                                            "kind": "choice",
+                                            "information-set": 18,
+                                            "player": 5
+                                        }
+                                    ],
+                                    "kind": "choice",
+                                    "information-set": 10,
+                                    "player": 4
+                                },
+                                {
+                                    "children": [
+                                        {
+                                            "children": [
+                                                {
+                                                    "payoffs": 60,
+                                                    "kind": "outcome"
+                                                },
+                                                {
+                                                    "payoffs": 61,
+                                                    "kind": "outcome"
+                                                }
+                                            ],
+                                            "kind": "choice",
+                                            "information-set": 20,
+                                            "player": 5
+                                        },
+                                        {
+                                            "children": [
+                                                {
+                                                    "payoffs": 62,
+                                                    "kind": "outcome"
+                                                },
+                                                {
+                                                    "payoffs": 63,
+                                                    "kind": "outcome"
+                                                }
+                                            ],
+                                            "kind": "choice",
+                                            "information-set": 20,
+                                            "player": 5
+                                        }
+                                    ],
+                                    "kind": "choice",
+                                    "information-set": 12,
+                                    "player": 4
+                                }
+                            ],
+                            "kind": "choice",
+                            "information-set": 4,
+                            "player": 3
+                        }
+                    ],
+                    "kind": "choice",
+                    "information-set": 2,
+                    "player": 2
+                }
+            ],
+            "kind": "choice",
+            "information-set": 1,
+            "player": 1
+        }
+    ],
+    "kind": "choice",
+    "information-set": 0,
+    "player": 0
+}
