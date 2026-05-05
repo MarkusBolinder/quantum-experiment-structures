@@ -1,0 +1,54 @@
+{
+  "ps": ["Alice", "Bob", "Nature"],
+  "as": ["Measure_X", "Measure_Z", "Spin_Up", "Spin_Down"],
+  "is": [
+    {
+      "i": "iset_Alice_Measurement",
+      "p": "Alice",
+      "a": ["Measure_X", "Measure_Z"],
+      "ns": [
+        {
+          "n": "Node_Alice_Choice",
+          "ps": []
+        }
+      ]
+    },
+    {
+      "i": "iset_Bob_Measurement",
+      "p": "Bob",
+      "a": ["Measure_X", "Measure_Z"],
+      "ns": [
+        {
+          "n": "Node_Bob_Choice",
+          "ps": []
+        }
+      ]
+    },
+    {
+      "i": "iset_Nature_Outcome_Alice_X",
+      "p": "Nature",
+      "a": ["Spin_Up", "Spin_Down"],
+      "ns": [
+        {
+          "n": "Node_Nature_Alice_X",
+          "ps": [
+            { "p": "Node_Alice_Choice", "a": "Measure_X" }
+          ]
+        }
+      ]
+    },
+    {
+      "i": "iset_Nature_Outcome_Bob_X",
+      "p": "Nature",
+      "a": ["Spin_Up", "Spin_Down"],
+      "ns": [
+        {
+          "n": "Node_Nature_Bob_X",
+          "ps": [
+            { "p": "Node_Bob_Choice", "a": "Measure_X" }
+          ]
+        }
+      ]
+    }
+  ]
+}

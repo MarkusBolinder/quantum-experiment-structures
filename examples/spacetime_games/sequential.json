@@ -1,0 +1,43 @@
+{
+  "ps": ["Alice", "Bob"],
+  "as": ["Measure_X", "Measure_Z"],
+  "is": [
+    {
+      "i": "iset_Alice_Turn",
+      "p": "Alice",
+      "a": ["Measure_X", "Measure_Z"],
+      "ns": [
+        {
+          "n": "Node_Alice",
+          "ps": [] 
+        }
+      ]
+    },
+    {
+      "i": "iset_Bob_After_X",
+      "p": "Bob",
+      "a": ["Measure_X", "Measure_Z"],
+      "ns": [
+        {
+          "n": "Node_Bob_sees_X",
+          "ps": [
+            { "p": "Node_Alice", "a": "Measure_X" }
+          ]
+        }
+      ]
+    },
+    {
+      "i": "iset_Bob_After_Z",
+      "p": "Bob",
+      "a": ["Measure_X", "Measure_Z"],
+      "ns": [
+        {
+          "n": "Node_Bob_sees_Z",
+          "ps": [
+            { "p": "Node_Alice", "a": "Measure_Z" }
+          ]
+        }
+      ]
+    }
+  ]
+}

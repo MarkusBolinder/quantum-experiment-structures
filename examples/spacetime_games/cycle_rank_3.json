@@ -1,0 +1,39 @@
+{
+  "ps": ["P0", "P1"],
+  "as": ["a", "b", "c", "0", "1"],
+  "is": [
+    {
+      "i": "iset_root",
+      "p": "P0",
+      "a": ["a", "b", "c"],
+      "ns": [{ "n": "Node_Root", "ps": [] }]
+    },
+    {
+      "i": "iset_1",
+      "p": "P1",
+      "a": ["0", "1"],
+      "ns": [
+        { "n": "Node_1_from_a", "ps": [{ "p": "Node_Root", "a": "a" }] },
+        { "n": "Node_1_from_b", "ps": [{ "p": "Node_Root", "a": "b" }] }
+      ]
+    },
+    {
+      "i": "iset_2",
+      "p": "P1",
+      "a": ["0", "1"],
+      "ns": [
+        { "n": "Node_2_from_b", "ps": [{ "p": "Node_Root", "a": "b" }] },
+        { "n": "Node_2_from_c", "ps": [{ "p": "Node_Root", "a": "c" }] }
+      ]
+    },
+    {
+      "i": "iset_3",
+      "p": "P1",
+      "a": ["0", "1"],
+      "ns": [
+        { "n": "Node_3_from_c", "ps": [{ "p": "Node_Root", "a": "c" }] },
+        { "n": "Node_3_from_a", "ps": [{ "p": "Node_Root", "a": "a" }] }
+      ]
+    }
+  ]
+}
