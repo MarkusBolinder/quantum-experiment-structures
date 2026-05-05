@@ -802,6 +802,275 @@ class SpacetimeGame:
         self.all_checks()
         return True
 
+    @classmethod
+    def from_process_matrix(cls, pmf_data):
+        """Convert a Process Matrix Framework JSON dict into a spacetime game.
+
+        'Start' and 'End' labs are ignored in the conversion as they are not real labs in the
+        process matrix framework. The conversion is done by creating a player for each lab, and
+        letting Nature 'play' the outcomes of the measurements that are performed in the labs. We
+        are assuming that the labs are perfectly transparent in their measuring and the sending of
+        information, so the spacetime game has perfect information (only singleton information
+        sets). Causal links between the labs results in duplicate measurements, i.e. a world for
+        every history that is possible to achieve with the number of qubits and measurement axes in
+        the labs. If there is no causal path between two labs, they are spacelike separated in the
+        spacetime game.
+
+        Cycles are treated as erros, although, in the process matrix framework, they correspond to
+        no specified causal order between the labs. It is debated whether this is physically
+        possible.
+
+        Args:
+            pmf_data: JSON-like data that is valid against the PMF schema.
+
+        Returns: a minimal (only required fields) SpacetimeGame instance converted from the process
+            matrix data provided to the function.
+
+        Raises:
+            ValueError: if there are duplicate labs or if there are cycles in the defined wires.
+                I.e. if it is possible to reach the same lab you have already visited by following
+                the wires defined in the JSON data. Also raised if there are duplicate lab names in
+                the process matrix JSON. If there are any inconsistencies in the JSON data, such as
+                duplicate names, then an error will also be raised.
+        """
+        pmf = pmf_data["ProcessMatrixFramework"]
+        raw_labs = pmf["Labs"]
+        raw_wires = pmf["Wires"]
+
+        ignored_names = set(["Start", "End"])
+        labs = dict()
+        for lab in raw_labs:
+            name = lab.get("Name")
+            if name in ignored_names:
+                continue
+            idx = lab["Index"]
+            if idx in labs:
+                raise ValueError(f"Duplicate lab index found: {idx}")
+            labs[idx] = lab
+
+        if not labs:
+            raise ValueError("No experimental labs found after removing Start/End.")
+
+        def lab_name(lab_idx):
+            lab = labs[lab_idx]
+            return lab.get("Name") or f"Lab_{lab_idx}"
+
+        def axis_action(lab_idx, axis_idx):
+            return f"lab_{lab_idx}_axis_{axis_idx}"
+
+        def outcome_action(lab_idx, axis_idx, outcome_idx):
+            return f"lab_{lab_idx}_axis_{axis_idx}_outcome_{outcome_idx}"
+
+        def sorted_measurements(lab):
+            return sorted(
+                lab["Measurements"],
+                key=lambda m: m["MeasurementAxisIndex"],
+            )
+
+        def sorted_outcomes(measurement):
+            return sorted(
+                measurement["CPMaps"],
+                key=lambda cp: cp["MeasurementOutcomeIndex"],
+            )
+
+        # direct causal graph between experimental labs
+        predecessors = defaultdict(set)
+        successors = defaultdict(set)
+        for wire in raw_wires:
+            from_idx = wire["From"]["LabIdx"]
+            to_idx = wire["To"]["LabIdx"]
+            if from_idx in labs and to_idx in labs:
+                predecessors[to_idx].add(from_idx)
+                successors[from_idx].add(to_idx)
+
+        # topological order of the experimental-lab graph
+        indegree = {idx: len(predecessors[idx]) for idx in labs}
+        queue = sorted(idx for idx, deg in indegree.items() if deg == 0)
+        topological_order = []
+        pos = 0
+        while pos < len(queue):
+            idx = queue[pos]
+            pos += 1
+            topological_order.append(idx)
+            for child in sorted(successors[idx]):
+                indegree[child] -= 1
+                if indegree[child] == 0:
+                    queue.append(child)
+
+        if len(topological_order) != len(labs):
+            raise ValueError(
+                "The experimental labs contain a directed cycle after removing Start/End."
+            )
+
+        # transitive causal ancestors for each lab
+        ancestors = defaultdict(set)
+        for idx in topological_order:
+            for child in successors[idx]:
+                ancestors[child].add(idx)
+                ancestors[child].update(ancestors[idx])
+
+        player_names = [lab_name(idx) for idx in topological_order] + ["Nature"]
+        # FIXME: if a lab is named 'Nature' this will raise an error
+        if len(player_names) != len(set(player_names)):
+            raise ValueError("Player names must be unique.")
+
+        all_actions = set()
+        spacetime_game_info_sets = []
+
+        # cache one node bundle per (lab, causal-context) pair
+        context_cache = defaultdict(dict)
+        context_counter = defaultdict(int)
+
+        def context_key_for(lab_idx, history):
+            """Project the full history to the causal past of one lab."""
+            lab_ancestors = ancestors[lab_idx]
+            return tuple(
+                (
+                    idx,
+                    history[idx]["axis_action"],
+                    history[idx]["outcome_action"],
+                )
+                for idx in topological_order
+                if idx in lab_ancestors
+            )
+
+        def create_context_bundle(lab_idx, history):
+            """Create singleton information sets for one lab in one causal context."""
+            key = context_key_for(lab_idx, history)
+            if key in context_cache[lab_idx]:
+                return context_cache[lab_idx][key]
+
+            lab = labs[lab_idx]
+            label = lab_name(lab_idx)
+            ctx_id = context_counter[lab_idx]
+            context_counter[lab_idx] += 1
+
+            measurements = sorted_measurements(lab)
+            if not measurements:
+                raise ValueError(f"Lab '{label}' has no measurements.")
+
+            setting_actions = [
+                axis_action(lab_idx, m["MeasurementAxisIndex"]) for m in measurements
+            ]
+            if not setting_actions:
+                raise ValueError(f"Lab '{label}' has no measurement axes.")
+
+            # only direct causal predecessors become parents of this context node
+            parent_entries = []
+            for pred_idx in predecessors[lab_idx]:
+                if pred_idx not in history:
+                    raise ValueError(
+                        f"Internal error: predecessor lab {pred_idx} missing from history."
+                    )
+                pred_state = history[pred_idx]
+                parent_entries.append(
+                    {"p": pred_state["outcome_node"], "a": pred_state["outcome_action"]}
+                )
+
+            setting_node_name = f"n_{lab_idx}_set_{ctx_id}"
+            setting_iset_id = f"is_{lab_idx}_set_{ctx_id}"
+
+            spacetime_game_info_sets.append(
+                {
+                    "i": setting_iset_id,
+                    "ns": [{"n": setting_node_name, "ps": parent_entries}],
+                    "p": label,
+                    "a": setting_actions,
+                }
+            )
+            all_actions.update(setting_actions)
+
+            outcome_by_axis = dict()
+            for measurement in measurements:
+                axis_idx = measurement["MeasurementAxisIndex"]
+                this_axis_action = axis_action(lab_idx, axis_idx)
+
+                outcomes = sorted_outcomes(measurement)
+                if not outcomes:
+                    raise ValueError(f"Lab '{label}', axis {axis_idx} has no CPMaps/outcomes.")
+
+                outcome_actions = [
+                    outcome_action(lab_idx, axis_idx, cp["MeasurementOutcomeIndex"])
+                    for cp in outcomes
+                ]
+                outcome_node_name = f"n_{lab_idx}_out_{ctx_id}_{axis_idx}"
+                outcome_iset_id = f"is_{lab_idx}_out_{ctx_id}_{axis_idx}"
+
+                spacetime_game_info_sets.append(
+                    {
+                        "i": outcome_iset_id,
+                        "ns": [
+                            {
+                                "n": outcome_node_name,
+                                "ps": [{"p": setting_node_name, "a": this_axis_action}],
+                            }
+                        ],
+                        "p": "Nature",
+                        "a": outcome_actions,
+                    }
+                )
+                all_actions.update(outcome_actions)
+
+                outcome_by_axis[this_axis_action] = {
+                    "node": outcome_node_name,
+                    "actions": outcome_actions,
+                }
+
+            bundle = {
+                "setting_node": setting_node_name,
+                "setting_iset": setting_iset_id,
+                "outcomes_by_axis": outcome_by_axis,
+            }
+            context_cache[lab_idx][key] = bundle
+            return bundle
+
+        def recurse(history, pos=0):
+            """Build the spacetime game recursively.
+
+            Args:
+                pos: integer denoting the current position in the topological order.
+                history: dict containing the current active history, describing what path we have
+                    taken through the 'process matrix framework graph'
+            """
+            if pos >= len(topological_order):
+                return
+
+            lab_idx = topological_order[pos]
+            lab = labs[lab_idx]
+
+            bundle = create_context_bundle(lab_idx, history)
+
+            for measurement in sorted_measurements(lab):
+                axis_idx = measurement["MeasurementAxisIndex"]
+                axis_label = axis_action(lab_idx, axis_idx)
+
+                outcome_bundle = bundle["outcomes_by_axis"][axis_label]
+                outcome_node_name = outcome_bundle["node"]
+
+                for cp, outcome_label in zip(
+                    sorted_outcomes(measurement), outcome_bundle["actions"]
+                ):
+                    next_history = dict(history)
+                    next_history[lab_idx] = {
+                        "setting_node": bundle["setting_node"],
+                        "outcome_node": outcome_node_name,
+                        "axis_action": axis_label,
+                        "outcome_action": outcome_label,
+                        "measurement_axis_index": axis_idx,
+                        "measurement_outcome_index": cp["MeasurementOutcomeIndex"],
+                    }
+                    recurse(next_history, pos + 1)
+
+        history = dict()
+        recurse(history)
+
+        spacetime_game_data = {
+            "ps": player_names,
+            "as": list(all_actions),
+            "is": spacetime_game_info_sets,
+        }
+        return cls(spacetime_game_data)
+
     def convert_to_extensive_game(self, linearization=None, default_utility=0, match_utility=True):
         """Convert to a game in extensive form with imperfect information.
 
