@@ -387,6 +387,8 @@ class CausalContextualityScenario:
 
 
 class StableCausalContextualityScenario(CausalContextualityScenario):
+    """Subclass of CCS representing scenarios that have stable enabling relations."""
+
     @staticmethod
     def _dedupe_preserve_order(items):
         """Remove duplicates while preserving the original order.
