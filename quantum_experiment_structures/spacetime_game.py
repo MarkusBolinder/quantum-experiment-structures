@@ -641,7 +641,7 @@ class SpacetimeGame:
             existing_contents = set()
 
             def expand(current_map):
-                # 1) identify what is currently activated based on choices made so far
+                # 1) identify what is currently activated/compatible based on choices made so far
                 activated = self._get_activated_information_sets_for_player(player, current_map)
                 player_activated = activated.intersection(player_isets)
 
