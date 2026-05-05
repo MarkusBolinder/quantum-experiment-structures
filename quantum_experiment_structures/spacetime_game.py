@@ -1,6 +1,6 @@
 """Python representation of a spacetime game."""
 
-from collections import Counter, defaultdict
+from collections import Counter, defaultdict, deque
 import inspect
 import itertools
 import json
@@ -801,6 +801,130 @@ class SpacetimeGame:
         # then check that everything is correct
         self.all_checks()
         return True
+
+    def convert_to_extensive_game(self, linearization=None, default_utility=0, match_utility=True):
+        """Convert to a game in extensive form with imperfect information.
+
+        The conversion is done by following a linearization of the spacetime game and recursively
+        building the corresponding game in extensive form with imperfect information. If no
+        linearization is given, one is computed using BFS. The main recursion keeps track of the
+        current history of nodes that are active and determines which other nodes can be active
+        based on this history. If we reach the end of the linearization, a payoff node (leaf) is
+        added at that place. The resulting game in extensive form with imperfect information matches
+        the GEFII_schema.jschema that recursively defines such games.
+
+        Args:
+            linearization: array containing a linearization of the spacetime game. If this is not
+                given, a topological sort will be performed on the spacetime game DAG and that will
+                be taken as the linearization instead.
+            default_utility: integer describing the utility that is given to an outcome node if
+                either match_utility is False or no matching history with specified payoffs was
+                found.
+            match_utility: boolean indicating whether to try and match the payoffs and leaves with a
+                corresponding history present in the spacetime game.
+        """
+        # 1) map string ids to integer ids to comply with the extensive form JSON Schema
+        player_to_int = {p: i for i, p in enumerate(self.players)}
+        info_set_to_int = {iset: i for i, iset in enumerate(self.info_sets)}
+
+        # 2) compute a linearization (topological sort) of the DAG
+        if not linearization:
+            in_degree = {n: 0 for n in self.nodes}
+            for node_name, node_info in self.nodes.items():
+                for p in node_info["node_data"]["ps"]:
+                    if p["p"] in self.nodes:
+                        in_degree[node_name] += 1
+
+            queue = deque(n for n in self.nodes if in_degree[n] == 0)
+            linearization = []
+            while queue:
+                current = queue.popleft()
+                linearization.append(current)
+                for child_name, child_info in self.nodes.items():
+                    for p in child_info["node_data"]["ps"]:
+                        if p["p"] == current:
+                            in_degree[child_name] -= 1
+                            if in_degree[child_name] == 0:
+                                queue.append(child_name)
+
+        # 3) recursive extensive form builder
+        def build_tree(history, node_idx=0):
+            """Construct the extensive form tree recursively.
+
+            Args:
+                history: dict mapping node names to actions chosen on this branch.
+                node_idx: current node index in the topological order (linearization).
+            """
+            # base case: reached final node
+            if node_idx >= len(linearization):
+                histories = self.data.get("z")
+                if histories is not None and match_utility:
+                    # try to match current path against terminal histories in game.data["z"]
+                    # convert node-actions to (iset, action) set for matching
+                    current_choices = set()
+                    for node_name, action in history.items():
+                        iset = self.nodes[node_name]["info_set_id"]
+                        current_choices.add((iset, action))
+
+                    for history in histories:
+                        # history["h"] is a list of {"i": iset, "a": action}
+                        history_choices = set(
+                            tuple(decision_point.values()) for decision_point in history["h"]
+                        )
+
+                        # if the history choices are a subset of choices made on this branch,
+                        # then we found our payoff node
+                        if history_choices <= current_choices:
+                            payoff_map = {u["p"]: u["v"] for u in history["u"]}
+                            return {
+                                "kind": "outcome",
+                                "payoffs": [
+                                    payoff_map.get(player, default_utility)
+                                    for player in self.players
+                                ],
+                            }
+
+                # default payoff
+                # NOTE: 'outcome' is what the extensive form game schema identifies leaves with
+                return {"kind": "outcome", "payoffs": [default_utility] * len(self.players)}
+
+            current_node_name = linearization[node_idx]
+            current_node_info = self.nodes[current_node_name]
+            node_data = current_node_info["node_data"]
+
+            # 4) check activation preconditions
+            activated = True
+            for parent in node_data["ps"]:
+                # node is activated if parent has been visited and the specified action was chosen
+                if history.get(parent["p"]) != parent["a"]:
+                    activated = False
+                    break
+
+            if not activated:
+                # skip the node if it is not activated in this history
+                return build_tree(history, node_idx + 1)
+
+            # 5) node is activated, so build a choice node according to the schema
+            iset_id = current_node_info["info_set_id"]
+            player_name = self.info_sets[iset_id]["p"]
+            actions = self.info_sets[iset_id]["a"]
+
+            children = []
+            for action in actions:
+                new_history = history.copy()
+                new_history[current_node_name] = action
+                children.append(build_tree(new_history, node_idx + 1))
+
+            # NOTE: 'choice' is what the extensive form game schema identifies decision points with
+            return {
+                "kind": "choice",
+                "player": player_to_int[player_name],
+                "information-set": info_set_to_int[iset_id],
+                "Children": children,
+            }
+
+        history = dict()
+        return build_tree(history)
 
 
 class AlternatingSpacetimeGame(SpacetimeGame):
