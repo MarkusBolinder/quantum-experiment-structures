@@ -1,7 +1,4 @@
-"""Pytest coverage for the core causal contextuality modules.
-
-The tests focus on causal contextuality scenarios and their stable / secured subclasses.
-"""
+"""Unit tests for the causal_contextuality_scenario module."""
 
 from copy import deepcopy
 from unittest.mock import patch

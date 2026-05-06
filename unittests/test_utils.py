@@ -1,4 +1,4 @@
-"""Unit tests for the utils module."""
+"""Unit tests for the utils.utils module."""
 
 import pytest
 import json

@@ -1,10 +1,4 @@
-"""Pytest coverage for the core causal contextuality modules.
-
-The tests focus on three layers:
-1. Causal contextuality scenarios and their stable / secured subclasses.
-2. Random scenario generation.
-3. Spacetime game validation and add/check helpers.
-"""
+"""Unit tests for the generator module."""
 
 from __future__ import annotations
 

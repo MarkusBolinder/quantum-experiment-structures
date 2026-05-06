@@ -1,7 +1,4 @@
-"""Pytest coverage for the core causal contextuality modules.
-
-The tests focus on three layers spacetime game validation and add/check helpers.
-"""
+"""Unit tests for the spacetime_game module."""
 
 from copy import deepcopy
 from unittest.mock import patch
