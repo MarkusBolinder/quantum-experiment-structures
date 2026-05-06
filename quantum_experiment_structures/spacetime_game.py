@@ -282,28 +282,41 @@ class SpacetimeGame:
         return True
 
     def check_strategies_consistency(self):
-        """Verify strategy validity, player matching, and uniqueness.
+        """Verify strategy validity, player matching, completeness, and uniqueness.
 
         Checks:
-        1. Player associated with strategy group matches player of the info sets used.
-        2. No duplicate strategies (as sets of assignments) exist for a player.
+        1. The player associated with each strategy group is known.
+        2. Every assignment in a strategy uses a valid information set for that player.
+        3. Every information set played by the player appears exactly once in each strategy.
+        4. No duplicate strategies (as sets of assignments) exist for a player.
 
         Raises:
-            ValueError: If strategy/player mismatch or duplicate strategies found.
+            ValueError: If a strategy/player mismatch, missing information set,
+                invalid action, or duplicate strategy is found.
         """
-        # TODO: check that all possible strategies are included
+        player_to_isets = {
+            player: {iset_id for iset_id, iset in self.info_sets.items() if iset["p"] == player}
+            for player in self.players
+        }
+
         for strategy_group in self.data.get("s", []):
             player = strategy_group["p"]
             if player not in self.players:
                 raise ValueError(f"Strategy lists an unknown player '{player}'.")
 
+            expected_isets = player_to_isets[player]
             seen_strategies = set()
+
             for strategy in strategy_group["s"]:
                 info_set_counter = Counter()
                 # check player consistency with info set
+                assigned_isets = set()
+
                 for assignment in strategy:
                     iset_id, action = assignment.values()
                     info_set_counter.update([iset_id])
+                    assigned_isets.add(iset_id)
+
                     iset = self.info_sets.get(iset_id)
                     if iset is None:
                         raise ValueError(
@@ -320,6 +333,16 @@ class SpacetimeGame:
                         raise ValueError(
                             f"Action '{action}' not playable in information set '{iset_id}'."
                         )
+
+                missing_isets = expected_isets - assigned_isets
+                extra_isets = assigned_isets - expected_isets
+                if missing_isets or extra_isets:
+                    raise ValueError(
+                        f"Strategy for player '{player}' does not assign exactly one action "
+                        f"to every information set. Missing: {sorted(missing_isets)}; "
+                        f"unexpected: {sorted(extra_isets)}."
+                    )
+
                 # make sure every information set is only listed once in the strategy
                 for k, v in info_set_counter.items():
                     if v > 1:
@@ -333,6 +356,7 @@ class SpacetimeGame:
                 if strategy_set in seen_strategies:
                     raise ValueError(f"Duplicate strategy found for player '{player}': {strategy}")
                 seen_strategies.add(strategy_set)
+
         return True
 
     def check_number_of_strategies(self):
@@ -411,7 +435,9 @@ class SpacetimeGame:
                             f"Information set '{iset_id}' is reachable "
                             f"but assigned '⟂' in strategy: {strategy}"
                         )
-                    if not is_active and action != "⟂":
+                    # TODO: change schema to include reduced strategies and then allow them to be
+                    # 'null', which will be used instead of the bottom symbol.
+                    if not is_active and (action != "⟂" and action is not None):
                         raise ValueError(
                             f"Information set '{iset_id}' is not reachable "
                             f"but assigned real action '{action}' in strategy: {strategy}"
@@ -1335,7 +1361,16 @@ class AlternatingSpacetimeGame(SpacetimeGame):
         return True
 
     def check_ba3(self):
-        """Ensure different outgoing labels from Bob must point to different information sets."""
+        """Ensure different outgoing labels from Bob must point to different information sets.
+
+        Important to note that this refers to the set of information sets that the Bob edge points
+        to. It is possible that two different Bob actions lead to the same Alfred information set,
+        but the set of all information sets that a Bob action leads to cannot be the same as for a
+        different Bob action. For example, if Bob has the actions {X,Y}, {Y,Z}, then {X,Y} will lead
+        to the Alfred information sets for measurement X and Y; {Y,Z} will lead to the information
+        sets for Y and Z. Both actions lead to Alfred's Y information set, but the set of all
+        information sets reachable with each Bob action is different.
+        """
         for name, node_info in self.nodes.items():
             if node_info["player"] == self.bob_player:
                 # map action label to frozen set of child info set ids
