@@ -341,6 +341,18 @@ def test_ccs_leaf_validation_failure_raises(valid_ccs_data):
         ccs.check_leaves()
 
 
+def test_ccs_missing_leaves_added(valid_ccs_data):
+    """Make sure that leaves are added when missing."""
+    data = deepcopy(valid_ccs_data)
+    for measurement in data["ms"]:
+        for outcome in measurement["o"]:
+            del outcome["l"]
+    ccs = CausalContextualityScenario(data)
+    assert ccs._handle_leaves(check=True) is False
+    assert ccs._handle_leaves(check=False) is True
+    assert ccs.check_leaves() is True
+
+
 def test_ccs_memberships_and_context_checks(valid_ccs_data):
     """Verify context membership calculations and checks."""
     ccs = CausalContextualityScenario(deepcopy(valid_ccs_data))
@@ -356,6 +368,9 @@ def test_ccs_memberships_and_context_checks(valid_ccs_data):
     assert ccs.check_contexts() is True
     assert ccs.check_cover() is True
 
+    del ccs.data["ms"][0]["c"]
+    assert ccs.check_contexts() is True
+
 
 def test_ccs_context_checks_detect_bad_data(valid_ccs_data):
     """Reject invalid contexts and duplicate outcome values."""
@@ -370,6 +385,13 @@ def test_ccs_context_checks_detect_bad_data(valid_ccs_data):
     bad_values = deepcopy(valid_ccs_data)
     bad_values["ms"][0]["o"].append({"v": 0})
     assert CausalContextualityScenario(bad_values).check_unique_values() is False
+
+
+def test_ccs_cover_is_anti_chain(stable_ccs_data):
+    """Test that a non-trivial cover is an anti-chain."""
+    data = deepcopy(stable_ccs_data)
+    ccs = CausalContextualityScenario(data)
+    assert ccs.check_anti_chain() is True
 
 
 def test_ccs_sort_data_and_human_readable(valid_ccs_data):
@@ -434,6 +456,19 @@ def test_ccs_with_cycles():
         "c": [["A", "B"]],
     }
     assert CausallySecuredScenario(cyclic).check_no_cycles() is False
+
+
+def test_ccs_topological_order_with_cycle():
+    """Detect causal cycles in a scenario using topological order."""
+    cyclic = {
+        "ms": [
+            {"m": "A", "e": [[{"m": "B", "v": 0}]], "o": [{"v": 0}]},
+            {"m": "B", "e": [[{"m": "A", "v": 0}]], "o": [{"v": 0}]},
+        ],
+        "c": [["A", "B"]],
+    }
+    with pytest.raises(ValueError, match="The enabling relations contain a cycle"):
+        CausallySecuredScenario(cyclic)._topological_order()
 
 
 def test_stable_ccs_stability_and_deduplication(stable_ccs_data):
@@ -585,3 +620,230 @@ def test_check_no_cycles_rejects_cycle(secured_cycle_fail_data):
     """Reject a causal graph with a directed cycle."""
     ccs = CausallySecuredScenario(deepcopy(secured_cycle_fail_data))
     assert ccs.check_no_cycles() is False
+
+
+def test_deduplicate_causal_bridges_raises_when_parent_copy_list_empty():
+    """Force deduplication to fail when a parent copy list is empty."""
+    data = {
+        "ms": [
+            {"m": "A", "e": [], "o": [{"v": 0}]},
+            {"m": "B", "e": [[{"m": "A", "v": 0}]], "o": [{"v": 0}]},
+        ],
+        "c": [["A", "B"]],
+    }
+    ccs = StableCausalContextualityScenario(deepcopy(data))
+
+    with patch.object(
+        StableCausalContextualityScenario,
+        "_topological_order",
+        return_value=["B", "A"],
+    ):
+        with pytest.raises(ValueError, match="has not been expanded yet"):
+            ccs.deduplicate_causal_bridges()
+
+
+def test_get_transitive_enabling_continues_on_seen_nodes():
+    """Visit the same node twice in the transitive closure queue."""
+    data = {
+        "ms": [
+            {"m": "A", "e": [], "o": [{"v": 0}]},
+            {"m": "B", "e": [[{"m": "A", "v": 0}]], "o": [{"v": 0}]},
+            {"m": "C", "e": [[{"m": "A", "v": 0}]], "o": [{"v": 0}]},
+            {
+                "m": "D",
+                "e": [[{"m": "B", "v": 0}, {"m": "C", "v": 0}]],
+                "o": [{"v": 0}],
+            },
+        ],
+        "c": [["A", "B", "C", "D"]],
+    }
+    ccs = CausallySecuredScenario(deepcopy(data))
+
+    closure = ccs._get_transitive_enabling("D")
+    assert closure == {"B": 0, "C": 0, "A": 0}
+
+
+def test_get_transitive_enabling_returns_none_on_conflict():
+    """Reject inconsistent transitive enabling requirements."""
+    data = {
+        "ms": [
+            {"m": "A", "e": [], "o": [{"v": 0}, {"v": 1}]},
+            {"m": "B", "e": [[{"m": "A", "v": 0}]], "o": [{"v": 0}]},
+            {"m": "C", "e": [[{"m": "A", "v": 1}]], "o": [{"v": 0}]},
+            {
+                "m": "D",
+                "e": [[{"m": "B", "v": 0}, {"m": "C", "v": 0}]],
+                "o": [{"v": 0}],
+            },
+        ],
+        "c": [["A", "B", "C", "D"]],
+    }
+    ccs = CausallySecuredScenario(deepcopy(data))
+
+    assert ccs._get_transitive_enabling("D") is None
+
+
+def test_check_causally_secured_cover_returns_false_for_inconsistent_closure():
+    """Reject a cover when a transitive closure is internally inconsistent."""
+    data = {
+        "ms": [
+            {"m": "A", "e": [], "o": [{"v": 0}, {"v": 1}]},
+            {"m": "B", "e": [[{"m": "A", "v": 0}]], "o": [{"v": 0}]},
+            {"m": "C", "e": [[{"m": "A", "v": 1}]], "o": [{"v": 0}]},
+            {
+                "m": "D",
+                "e": [[{"m": "B", "v": 0}, {"m": "C", "v": 0}]],
+                "o": [{"v": 0}],
+            },
+        ],
+        "c": [["A", "B", "C", "D"]],
+    }
+    ccs = CausallySecuredScenario(deepcopy(data))
+
+    assert ccs.check_causally_secured_cover() is False
+
+
+def test_check_causally_secured_cover_returns_false_for_nonpropagating_facet():
+    """Reject a facet that does not contain its enabling support."""
+    data = {
+        "ms": [
+            {"m": "A", "e": [], "o": [{"v": 0}]},
+            {"m": "B", "e": [[{"m": "A", "v": 0}]], "o": [{"v": 0}]},
+        ],
+        "c": [["B"]],
+    }
+    ccs = CausallySecuredScenario(deepcopy(data))
+
+    assert ccs.check_causally_secured_cover() is False
+
+
+def test_check_causally_secured_cover_returns_false_for_conflicting_histories():
+    """Reject a facet containing two measurements with incompatible transitive closures."""
+    data = {
+        "ms": [
+            {"m": "R", "e": [], "o": [{"v": 0}, {"v": 1}]},
+            {"m": "X", "e": [[{"m": "R", "v": 0}]], "o": [{"v": 0}]},
+            {"m": "Y", "e": [[{"m": "R", "v": 1}]], "o": [{"v": 0}]},
+        ],
+        "c": [["R", "X", "Y"]],
+    }
+    ccs = CausallySecuredScenario(deepcopy(data))
+
+    assert ccs.check_causally_secured_cover() is False
+
+
+def test_check_unique_causal_bridges_returns_false_on_empty_relation():
+    """Reject an empty enabling relation paired with another relation."""
+    data = {
+        "ms": [
+            {"m": "A", "e": [], "o": [{"v": 0}]},
+            {
+                "m": "B",
+                "e": [[], [{"m": "A", "v": 0}]],
+                "o": [{"v": 0}],
+            },
+        ],
+        "c": [["A", "B"]],
+    }
+    ccs = CausallySecuredScenario(deepcopy(data))
+    assert ccs.check_unique_causal_bridges() is False
+
+
+def test_check_unique_causal_bridges_hits_contradiction_branch():
+    """Detect a contradiction between two enabling relations."""
+    data = {
+        "ms": [
+            {"m": "A", "e": [], "o": [{"v": 0}, {"v": 1}]},
+            {"m": "C", "e": [], "o": [{"v": 0}]},
+            {
+                "m": "B",
+                "e": [
+                    [{"m": "A", "v": 0}, {"m": "C", "v": 0}],
+                    [{"m": "A", "v": 1}, {"m": "C", "v": 0}],
+                ],
+                "o": [{"v": 0}],
+            },
+        ],
+        "c": [["A", "B", "C"]],
+    }
+    ccs = CausallySecuredScenario(deepcopy(data))
+    assert ccs.check_unique_causal_bridges() is True
+
+
+def test_value_label_and_context_label_branches():
+    """Cover the special label formatting branches."""
+    assert CausallySecuredScenario._value_label({"v": 7}) == "7"
+    assert CausallySecuredScenario._value_label("plain_text") == "plain_text"
+    assert CausallySecuredScenario._context_label(frozenset()) == "{}"
+
+
+def test_to_spacetime_game_rejects_multiple_enabling_relations():
+    """Reject a measurement with more than one enabling relation."""
+    data = {
+        "ms": [
+            {"m": "A", "e": [], "o": [{"v": 0}]},
+            {
+                "m": "B",
+                "e": [[{"m": "A", "v": 0}], [{"m": "A", "v": 1}]],
+                "o": [{"v": 0}],
+            },
+        ],
+        "c": [["A", "B"]],
+    }
+    ccs = CausallySecuredScenario(deepcopy(data))
+
+    with pytest.raises(ValueError, match="Multiple enabling relations"):
+        ccs.to_spacetime_game()
+
+
+def test_to_spacetime_game_rejects_empty_local_cover():
+    """Reject a scenario whose local cover restriction becomes empty."""
+    data = {
+        "ms": [
+            {"m": "A", "e": [], "o": [{"v": 0}]},
+            {"m": "B", "e": [[{"m": "A", "v": 0}]], "o": [{"v": 0}]},
+        ],
+        "c": [["A"]],
+    }
+    ccs = CausallySecuredScenario(deepcopy(data))
+
+    with pytest.raises(ValueError, match="Empty local cover"):
+        ccs.to_spacetime_game()
+
+
+def test_to_spacetime_game_hits_try_create_bob_nodes_break_and_continue():
+    """Exercise the candidate-missing and skip-existing-bridge branches."""
+    data = {
+        "ms": [
+            {"m": "A", "e": [], "o": [{"v": 0}]},
+            {"m": "B", "e": [[{"m": "A", "v": 0}]], "o": [{"v": 0}]},
+            {"m": "C", "e": [[{"m": "A", "v": 0}]], "o": [{"v": 0}]},
+            {
+                "m": "D",
+                "e": [[{"m": "B", "v": 0}, {"m": "C", "v": 0}]],
+                "o": [{"v": 0}],
+            },
+        ],
+        "c": [["A", "B", "C", "D"]],
+    }
+    ccs = CausallySecuredScenario(deepcopy(data))
+    game = ccs.to_spacetime_game()
+
+    assert game["ps"] == ["Bob", "Alfred"]
+    assert any(iset["p"] == "Bob" for iset in game["is"])
+    assert any(iset["p"] == "Alfred" for iset in game["is"])
+
+
+def test_to_spacetime_game_rejects_missing_root_local_cover():
+    """Reject a scenario with no root local cover."""
+    data = {
+        "ms": [
+            {"m": "A", "e": [[{"m": "B", "v": 0}]], "o": [{"v": 0}]},
+            {"m": "B", "e": [[{"m": "A", "v": 0}]], "o": [{"v": 0}]},
+        ],
+        "c": [["A", "B"]],
+    }
+    ccs = CausallySecuredScenario(deepcopy(data))
+
+    with pytest.raises(ValueError, match="No root local cover"):
+        ccs.to_spacetime_game()

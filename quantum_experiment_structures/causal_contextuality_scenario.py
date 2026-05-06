@@ -1020,8 +1020,6 @@ class CausallySecuredScenario(StableCausalContextualityScenario):
         # store nodes for fast lookup
         bob_by_id = dict()
         bob_by_bridge = dict()
-        alfred_by_id = dict()
-        alfred_by_signature = set()
 
         # Alfred nodes grouped by measurement
         alfred_by_measurement = defaultdict(list)
@@ -1031,9 +1029,6 @@ class CausallySecuredScenario(StableCausalContextualityScenario):
 
         def add_bob_node(bridge, parents):
             """Create a Bob node instance keyed only by its enabling bridge."""
-            if bridge in bob_by_bridge:
-                return None
-
             # NOTE: this needs to be sorted for the key lookups to work properly
             parent_entries = tuple(sorted(tuple(p.values()) for p in parents))
 
@@ -1061,11 +1056,6 @@ class CausallySecuredScenario(StableCausalContextualityScenario):
         def add_alfred_node(bob_node_id, measurement, context):
             """Create an Alfred node for a particular Bob node, measurement, and context."""
             context_label = self._context_label(context)
-            sig = (bob_node_id, measurement, context_label)
-            if sig in alfred_by_signature:
-                return None
-
-            alfred_by_signature.add(sig)
             node_id = f"{measurement}_{context_label}"
             node = _AlfredNode(
                 n=node_id,
@@ -1076,23 +1066,16 @@ class CausallySecuredScenario(StableCausalContextualityScenario):
             )
 
             alfred_nodes.append(node)
-            alfred_by_id[node_id] = node
             alfred_by_measurement[measurement].append(node)
             return node
 
         # root node
         add_bob_node(root, [])
 
-        processed_bob = set()
-
         def expand_bob_nodes():
             """Expand all queued Bob nodes into Alfred nodes."""
             while bob_queue:
                 current_id = bob_queue.popleft()
-                if current_id in processed_bob:
-                    continue
-                processed_bob.add(current_id)
-
                 current_bridge = bob_by_id[current_id].bridge
 
                 for context in local_cover[current_bridge]:
