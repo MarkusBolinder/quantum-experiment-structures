@@ -30,19 +30,17 @@ def test_is_antichain():
 
 
 def test_create_local_covers():
-    """Coverage: L44-67 - Bruteforce local cover generation."""
-    # Test valid case
+    """Verify bruteforce local cover generation."""
     covers = create_local_covers([1, 2])
     assert [[1], [2]] in covers
     assert [[1, 2]] in covers
 
-    # Test ValueError for len > 4
     with pytest.raises(ValueError, match="The brute force approach scales"):
         create_local_covers([1, 2, 3, 4, 5])
 
 
 def test_parse_range():
-    """Coverage: L241-247 - Range regex parsing."""
+    """Try parsing some different range formats."""
     assert _parse_range("5") == [5, 5]
     assert _parse_range("1:3") == [1, 3]
     assert _parse_range("range=2..4") == [2, 4]
@@ -52,7 +50,7 @@ def test_parse_range():
 
 
 def test_create_anti_chain():
-    """Coverage: L276 - Subsets pruning for antichain."""
+    """Ensure the anti-chain creating works as intended."""
     contexts = [set(["A"]), set(["A", "B"]), set(["B", "C"])]
     cover = create_anti_chain(contexts)
     cover = sorted(sorted(context) for context in cover)
@@ -61,8 +59,18 @@ def test_create_anti_chain():
     assert ["A"] not in cover
 
 
+def test_create_anti_chain_reverse_order():
+    """Ensure the anti-chain creating works as intended with different subset ordering."""
+    contexts = list(reversed([set(["A"]), set(["A", "B"]), set(["B", "C"])]))
+    cover = create_anti_chain(contexts)
+    cover = sorted(sorted(context) for context in cover)
+    assert ["A", "B"] in cover
+    assert ["B", "C"] in cover
+    assert ["A"] not in cover
+
+
 def test_extend_with_default():
-    """Coverage: L305, L319 - Defaults applied from allOf/anyOf schemas."""
+    """Test the handling of composite keywords (allOf/anyOf schemas)."""
     schema = {
         "properties": {
             "prop1": {"default": "val1"},
@@ -82,7 +90,7 @@ def test_extend_with_default():
 
 
 def test_numpy_encoder():
-    """Coverage: L338-344 - Numpy serialization."""
+    """Test numpy serialization method."""
     data = {
         "int_val": np.int64(42),
         "float_val": np.float32(3.14),
@@ -92,3 +100,43 @@ def test_numpy_encoder():
     assert "42" in json_str
     assert "3.14" in json_str
     assert "[1, 2, 3]" in json_str
+
+
+def test_extend_with_default_finds_default_through_non_dict_schema_fragment():
+    """Find defaults even when one combination member is a boolean schema."""
+    schema = {
+        "properties": {
+            "prop": {
+                "allOf": [
+                    True,  # Triggers the non-dict branch in _find_default.
+                    {"default": "val"},
+                ]
+            }
+        }
+    }
+    instance = {}
+    validator = DefaultValuesValidator(schema)
+
+    properties_validator = DefaultValuesValidator.VALIDATORS["properties"]
+    list(properties_validator(validator, schema["properties"], instance, schema))
+
+    assert instance["prop"] == "val"
+
+
+def test_extend_with_default_returns_early_for_non_dict_instance():
+    """Return immediately when the instance being validated is not a dict."""
+    schema = {"properties": {"prop": {"default": "val"}}}
+    validator = DefaultValuesValidator(schema)
+
+    properties_validator = DefaultValuesValidator.VALIDATORS["properties"]
+    assert list(properties_validator(validator, schema["properties"], [], schema)) == []
+
+
+def test_numpy_encoder_falls_back_to_base_json_encoder():
+    """Defer to the base JSON encoder for unsupported objects."""
+
+    class Unsupported:
+        pass
+
+    with pytest.raises(TypeError):
+        json.dumps({"x": Unsupported()}, cls=NumpyEncoder)
