@@ -55,7 +55,7 @@ def plot_process_matrix(pmf_data, filename="pmf", format="png", view=True):
 
         # embed HTML to format the "lab box"
         # this lists the lab name, qubit counts, and measurement summary
-        label = f'''<
+        label = f"""<
             <TABLE BORDER="0" CELLBORDER="1" CELLSPACING="0" CELLPADDING="4">
                 <TR>
                     <TD COLSPAN="2" BGCOLOR="{fill_color}">
@@ -66,11 +66,11 @@ def plot_process_matrix(pmf_data, filename="pmf", format="png", view=True):
                     <TD><FONT POINT-SIZE="32">In Qubits: {in_q}</FONT></TD>
                     <TD><FONT POINT-SIZE="32">Out Qubits: {out_q}</FONT></TD>
                 </TR>
-        '''
+        """
 
         # measurement metadata (CPMap outcomes)
         for m in lab["Measurements"]:
-            axis = m["MeasurementsAxisIndex"]
+            axis = m["MeasurementAxisIndex"]
             outcomes = [str(cp["MeasurementOutcomeIndex"]) for cp in m["CPMaps"]]
             label += (
                 '<TR><TD COLSPAN="2" ALIGN="LEFT"><FONT POINT-SIZE="30">'
