@@ -25,6 +25,8 @@ dependencies = [
     "pyarrow>=15.0.0",
     "pyproject-flake8",
     "pyspark",
+    "pytest",
+    "pytest-cov",
 ]
 
 [project.scripts]
@@ -64,4 +66,12 @@ exclude = [
     "build",
     "dist",
     ".eggs",
+]
+
+[tool.coverage.run]
+omit = [
+    "quantum_experiment_structures/data/*",
+    "quantum_experiment_structures/utils/*generator*.py",
+    "quantum_experiment_structures/utils/plotting_utils.py",
+    "quantum_experiment_structures/__version__.py",
 ]
