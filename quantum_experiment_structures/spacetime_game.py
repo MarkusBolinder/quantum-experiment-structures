@@ -481,8 +481,6 @@ class SpacetimeGame:
 
                     # a child node is reachable if parent requirements are met
                     parents = child_info["node_data"]["ps"]
-                    if not parents:
-                        continue
 
                     child_reachable = True
                     for p in parents:
@@ -978,16 +976,10 @@ class SpacetimeGame:
             setting_actions = [
                 axis_action(lab_idx, m["MeasurementAxisIndex"]) for m in measurements
             ]
-            if not setting_actions:
-                raise ValueError(f"Lab '{label}' has no measurement axes.")
 
             # only direct causal predecessors become parents of this context node
             parent_entries = []
             for pred_idx in predecessors[lab_idx]:
-                if pred_idx not in history:
-                    raise ValueError(
-                        f"Internal error: predecessor lab {pred_idx} missing from history."
-                    )
                 pred_state = history[pred_idx]
                 parent_entries.append(
                     {"p": pred_state["outcome_node"], "a": pred_state["outcome_action"]}

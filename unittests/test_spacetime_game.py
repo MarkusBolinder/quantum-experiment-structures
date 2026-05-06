@@ -426,6 +426,65 @@ def pmf_cycle_data():
 
 
 @pytest.fixture
+def valid_pmf_data():
+    """Return a minimal valid process-matrix fixture."""
+    return {
+        "ProcessMatrixFramework": {
+            "Labs": [
+                {
+                    "Name": "Start",
+                    "Index": 0,
+                    "NumberOfInQubits": 0,
+                    "NumberOfOutQubits": 0,
+                    "Measurements": [],
+                },
+                {
+                    "Name": "End",
+                    "Index": 1,
+                    "NumberOfInQubits": 0,
+                    "NumberOfOutQubits": 0,
+                    "Measurements": [],
+                },
+                {
+                    "Name": "A",
+                    "Index": 2,
+                    "NumberOfInQubits": 1,
+                    "NumberOfOutQubits": 1,
+                    "Measurements": [
+                        {
+                            "MeasurementAxisIndex": 0,
+                            "CPMaps": [
+                                {"MeasurementOutcomeIndex": 0, "CPMap": [[1.0]]},
+                            ],
+                        }
+                    ],
+                },
+                {
+                    "Name": "B",
+                    "Index": 3,
+                    "NumberOfInQubits": 1,
+                    "NumberOfOutQubits": 1,
+                    "Measurements": [
+                        {
+                            "MeasurementAxisIndex": 0,
+                            "CPMaps": [
+                                {"MeasurementOutcomeIndex": 0, "CPMap": [[1.0]]},
+                            ],
+                        }
+                    ],
+                },
+            ],
+            "Wires": [
+                {
+                    "From": {"LabIdx": 2, "OutQubitLocalIdx": 0},
+                    "To": {"LabIdx": 3, "InQubitLocalIdx": 0},
+                },
+            ],
+        }
+    }
+
+
+@pytest.fixture
 def timelike_game_data():
     """Return a minimal timelike spacetime-game fixture."""
     return {
@@ -1273,3 +1332,206 @@ def test_strategies_must_cover_all_player_information_sets(valid_game_data):
 
     with pytest.raises(ValueError, match="does not assign exactly one action"):
         SpacetimeGame(incomplete).check_strategies_consistency()
+
+
+def test_init_rejects_non_string_actions(valid_game_data):
+    """Reject non-string actions during initialization."""
+    data = deepcopy(valid_game_data)
+    data["as"] = ["play", 1]
+
+    with pytest.raises(NotImplementedError):
+        SpacetimeGame(data)
+
+
+def test_check_strategies_consistency_rejects_invalid_assignments(valid_game_data):
+    """Reject unknown info sets, foreign info sets, invalid actions, and duplicates."""
+    unknown_iset = deepcopy(valid_game_data)
+    unknown_iset["s"] = [{"p": "Alice", "s": [[{"i": "I99", "a": "play"}]]}]
+    with pytest.raises(ValueError, match="references unknown info set"):
+        SpacetimeGame(unknown_iset).check_strategies_consistency()
+
+    foreign_iset = deepcopy(valid_game_data)
+    foreign_iset["s"] = [{"p": "Alice", "s": [[{"i": "I2", "a": "play"}]]}]
+    with pytest.raises(ValueError, match="belonging to player"):
+        SpacetimeGame(foreign_iset).check_strategies_consistency()
+
+    bad_action = deepcopy(valid_game_data)
+    bad_action["s"] = [{"p": "Alice", "s": [[{"i": "I1", "a": "invalid"}]]}]
+    with pytest.raises(ValueError, match="not playable in information set"):
+        SpacetimeGame(bad_action).check_strategies_consistency()
+
+    duplicate_assignment = deepcopy(valid_game_data)
+    duplicate_assignment["s"] = [
+        {"p": "Alice", "s": [[{"i": "I1", "a": "play"}, {"i": "I1", "a": "pass"}]]},
+        {"p": "Bob", "s": [[{"i": "I2", "a": "pass"}]]},
+    ]
+    with pytest.raises(ValueError, match="assigned more than one action"):
+        SpacetimeGame(duplicate_assignment).check_strategies_consistency()
+
+
+def test_get_activated_information_sets_covers_root_case(valid_game_data):
+    """Verify activated information sets on a simple game."""
+    game = SpacetimeGame(deepcopy(valid_game_data))
+    activated = game._get_activated_information_sets_for_player("Alice", {"I1": "play"})
+    assert "I1" in activated
+
+
+def test_add_histories_initializes_missing_history_list(valid_game_data):
+    """Create the history list when it is missing."""
+    data = deepcopy(valid_game_data)
+    data.pop("z", None)
+
+    game = SpacetimeGame(data)
+    game.add_histories()
+
+    assert "z" in game.data
+    assert isinstance(game.data["z"], list)
+    assert len(game.data["z"]) > 0
+
+
+def test_all_checks_raises_on_first_failed_check(valid_game_data, monkeypatch):
+    """Raise when one check method returns False."""
+    game = SpacetimeGame(deepcopy(valid_game_data))
+    monkeypatch.setattr(SpacetimeGame, "check_no_cycles", lambda self: False)
+
+    with pytest.raises(ValueError, match="Inconsistency detected"):
+        game.all_checks()
+
+
+def test_everything_raises_on_failed_validation(valid_game_data, monkeypatch):
+    """Raise when schema validation fails."""
+    game = SpacetimeGame(deepcopy(valid_game_data))
+    monkeypatch.setattr(game, "validate", lambda: False)
+
+    with pytest.raises(jsonschema.ValidationError, match="not valid against the schema"):
+        game.everything()
+
+
+def test_from_process_matrix_valid_conversion(valid_pmf_data):
+    """Convert a valid process matrix into a spacetime game."""
+    game = SpacetimeGame.from_process_matrix(deepcopy(valid_pmf_data))
+    assert game.players == {"A", "B", "Nature"}
+    assert game.validate() is True
+
+
+def test_from_process_matrix_rejects_duplicate_lab_index(valid_pmf_data):
+    """Reject duplicate experimental lab indices."""
+    data = deepcopy(valid_pmf_data)
+    data["ProcessMatrixFramework"]["Labs"][2]["Index"] = 7
+    data["ProcessMatrixFramework"]["Labs"][3]["Index"] = 7
+
+    with pytest.raises(ValueError, match="Duplicate lab index found"):
+        SpacetimeGame.from_process_matrix(data)
+
+
+def test_from_process_matrix_rejects_no_experimental_labs():
+    """Reject a process matrix without experimental labs."""
+    data = {
+        "ProcessMatrixFramework": {
+            "Labs": [
+                {
+                    "Name": "Start",
+                    "Index": 0,
+                    "NumberOfInQubits": 0,
+                    "NumberOfOutQubits": 0,
+                    "Measurements": [],
+                },
+                {
+                    "Name": "End",
+                    "Index": 1,
+                    "NumberOfInQubits": 0,
+                    "NumberOfOutQubits": 0,
+                    "Measurements": [],
+                },
+            ],
+            "Wires": [],
+        }
+    }
+
+    with pytest.raises(ValueError, match="No experimental labs found"):
+        SpacetimeGame.from_process_matrix(data)
+
+
+def test_from_process_matrix_rejects_duplicate_player_names(valid_pmf_data):
+    """Reject duplicate lab names after topological sorting."""
+    data = deepcopy(valid_pmf_data)
+    data["ProcessMatrixFramework"]["Labs"][2]["Name"] = "X"
+    data["ProcessMatrixFramework"]["Labs"][3]["Name"] = "X"
+
+    with pytest.raises(ValueError, match="Player names must be unique"):
+        SpacetimeGame.from_process_matrix(data)
+
+
+def test_from_process_matrix_rejects_cycle(valid_pmf_data):
+    """Reject a directed cycle among experimental labs."""
+    data = deepcopy(valid_pmf_data)
+    data["ProcessMatrixFramework"]["Wires"].append(
+        {"From": {"LabIdx": 3, "OutQubitLocalIdx": 0}, "To": {"LabIdx": 2, "InQubitLocalIdx": 0}}
+    )
+
+    with pytest.raises(ValueError, match="directed cycle"):
+        SpacetimeGame.from_process_matrix(data)
+
+
+def test_from_process_matrix_rejects_empty_measurements(valid_pmf_data):
+    """Reject a lab that has no measurements."""
+    data = deepcopy(valid_pmf_data)
+    data["ProcessMatrixFramework"]["Labs"][2]["Measurements"] = []
+
+    with pytest.raises(ValueError, match="has no measurements"):
+        SpacetimeGame.from_process_matrix(data)
+
+
+def test_from_process_matrix_rejects_empty_cpmaps(valid_pmf_data):
+    """Reject a measurement with no CPMaps."""
+    data = deepcopy(valid_pmf_data)
+    data["ProcessMatrixFramework"]["Labs"][2]["Measurements"][0]["CPMaps"] = []
+
+    with pytest.raises(ValueError, match="has no CPMaps/outcomes"):
+        SpacetimeGame.from_process_matrix(data)
+
+
+def test_convert_to_extensive_game_without_linearization(valid_game_data):
+    """Use the built-in topological linearization."""
+    game = SpacetimeGame(deepcopy(valid_game_data))
+    ext = game.convert_to_extensive_game()
+    assert ext["kind"] in {"choice", "outcome"}
+
+
+def test_check_roots_and_leaves_fails_for_non_bob_root():
+    """Reject a root node that is not Bob."""
+    data = {
+        "ps": ["Bob", "Alfred"],
+        "as": ["a"],
+        "is": [
+            {"i": "I1", "p": "Alfred", "a": ["a"], "ns": [{"n": "N1", "ps": []}]},
+            {"i": "I3", "p": "some other guy", "a": ["a"], "ns": [{"n": "N3", "ps": []}]},
+            {
+                "i": "I2",
+                "p": "Bob",
+                "a": ["a"],
+                "ns": [{"n": "N2", "ps": [{"p": "N1", "a": "a"}]}],
+            },
+        ],
+    }
+    game = AlternatingSpacetimeGame(data)
+    assert game.check_roots_and_leaves() is False
+
+
+def test_check_ab1_skips_empty_alfred_info_set():
+    """Skip empty Alfred information sets."""
+    data = {
+        "ps": ["Bob", "Alfred"],
+        "as": ["a"],
+        "is": [
+            {"i": "I1", "p": "Alfred", "a": ["a"], "ns": []},
+            {
+                "i": "I2",
+                "p": "Bob",
+                "a": ["a"],
+                "ns": [{"n": "N2", "ps": []}],
+            },
+        ],
+    }
+    game = AlternatingSpacetimeGame(data)
+    assert game.check_ab1() is True
