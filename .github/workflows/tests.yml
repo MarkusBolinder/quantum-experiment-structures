@@ -35,7 +35,7 @@ jobs:
           pytest --cov=quantum_experiment_structures \
                  --cov-report=term-missing \
                  --cov-report=xml \
-                 --cov-fail-under=75
+                 --cov-fail-under=100.0
 
       - name: Upload coverage
         uses: actions/upload-artifact@v4
