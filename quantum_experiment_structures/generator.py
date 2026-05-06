@@ -40,6 +40,7 @@ Example usage:
         # the generator object contains the scenarios if they were not written to disk
 """
 
+from collections import defaultdict
 import json
 import math
 import os
@@ -769,7 +770,6 @@ class CCSGenerator:
         measurements,
         enabling_relations_dict,
         allow_unclean_local_covers=False,
-        debug=False,
         max_partition_tries=100,
     ):
         """Generate a causally secured cover using random local covers.
@@ -795,8 +795,6 @@ class CCSGenerator:
             allow_unclean_local_covers (bool): If False, reject and resample local
                 partitions that are internally inconsistent. If True, keep them and
                 split incompatible blocks into singletons when needed.
-            debug (bool): Print compacted relations, closures, sampled local covers,
-                and merge progress.
             max_partition_tries (int): Max number of attempts to sample a clean local
                 partition for each enabling group.
 
@@ -862,32 +860,11 @@ class CCSGenerator:
         for m in measurements:
             closure_of(m)
 
-        if debug:
-            print("\n[CCS] Compact enabling relations / unique bridges:")
-            for m in measurements:
-                rel = canonical_relation(unique_bridge[m])
-                print(f"  {m}: {rel if rel else '∅'}")
-
-            print("\n[CCS] Transitive closures:")
-            for m in measurements:
-                req = closure_req[m]
-                if req:
-                    pretty = ", ".join(f"{k}={v}" for k, v in sorted(req.items()))
-                    print(f"  τ̄({m}) = {{{pretty}}}")
-                else:
-                    print(f"  τ̄({m}) = ∅")
-
-        # 3) group RHS measurements by identical lhs enabling relation
-        groups = dict()
+        # 3) group rhs measurements by identical lhs enabling relation
+        groups = defaultdict(list)
         for m in measurements:
             lhs_key = canonical_relation(unique_bridge[m])
-            groups.setdefault(lhs_key, []).append(m)
-
-        if debug:
-            print("\n[CCS] Compacted enabling groups (same lhs -> rhs measurements):")
-            for lhs_key, rhs in groups.items():
-                lhs_str = lhs_key if lhs_key else "∅"
-                print(f"  lhs={lhs_str}  => rhs={sorted(rhs)}")
+            groups[lhs_key].append(m)
 
         # 4) sample a random local cover for each group
         def block_is_clean(block):
@@ -903,12 +880,6 @@ class CCSGenerator:
         # TODO: handle the cleanliness of the local covers in the generation in some way
         local_covers = dict()
         for lhs_key, rhs in groups.items():
-            rhs = list(rhs)
-            # TODO: can this happen, or would it be okay with groups being a defaultdict?
-            if not rhs:
-                local_covers[lhs_key] = []
-                continue
-
             sampled = None
             # FIXME: remove the max_tries logic and force it to succeed every time in some way
             for _ in range(max_partition_tries):
@@ -924,14 +895,6 @@ class CCSGenerator:
                 )
 
             local_covers[lhs_key] = sampled
-
-        if debug:
-            print("\n[CCS] Sampled local covers:")
-            for lhs_key, blocks in local_covers.items():
-                lhs_str = lhs_key if lhs_key else "∅"
-                print(f"  lhs={lhs_str}")
-                for block in blocks:
-                    print(f"    {sorted(block)}")
 
         # 5) convert each local block into a candidate global context
         candidate_contexts = []
@@ -975,11 +938,6 @@ class CCSGenerator:
                     }
                 )
 
-        if debug:
-            print("\n[CCS] Initial candidate contexts:")
-            for ctx in candidate_contexts:
-                print(f"  {sorted(ctx['meas'])}")
-
         # 6) remove non-maximal contexts (enforce antichain)
         candidate_contexts.sort(key=lambda c: len(c["meas"]), reverse=True)
         cover = []
@@ -1006,10 +964,5 @@ class CCSGenerator:
         final_cover = []
         for ctx in cover:
             final_cover.append(sorted(ctx["meas"]))
-
-        if debug:
-            print("\n[CCS] Final causally secured cover:")
-            for ctx in final_cover:
-                print(f"  {ctx}")
 
         return final_cover

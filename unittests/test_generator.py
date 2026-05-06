@@ -12,7 +12,6 @@ import json
 from copy import deepcopy
 from pathlib import Path
 
-import jsonschema
 import pytest
 
 import quantum_experiment_structures.generator as generator_module
@@ -23,18 +22,41 @@ from quantum_experiment_structures.utils import utils
 class ScriptedRNG:
     """Provide deterministic random values for generator tests."""
 
-    def __init__(self, *, randint_values=(), random_value=0.0, reverse_shuffle=False):
-        self._randint_values = iter(randint_values)
+    def __init__(
+        self,
+        randint_value=0,
+        randint_values=None,
+        random_value=0.0,
+        random_values=None,
+        choice_value=0,
+        choice_values=None,
+        randrange_value=0,
+        randrange_values=None,
+        reverse_shuffle=False,
+    ):
+        self._randint_value = randint_value
+        self._randint_values = iter(randint_values or [])
         self._random_value = random_value
+        self._random_values = iter(random_values or [])
+        self._choice_value = choice_value
+        self._choice_values = iter(choice_values or [])
+        self._randrange_value = randrange_value
+        self._randrange_values = iter(randrange_values or [])
         self._reverse_shuffle = reverse_shuffle
 
     def randint(self, _a, _b):
         """Return the next scripted integer."""
-        return next(self._randint_values)
+        try:
+            return next(self._randint_values)
+        except StopIteration:
+            return self._randint_value
 
     def random(self):
         """Return the scripted floating-point value."""
-        return self._random_value
+        try:
+            return next(self._random_values)
+        except StopIteration:
+            return self._random_value
 
     def sample(self, population, k):
         """Return the first k items from the population."""
@@ -42,7 +64,10 @@ class ScriptedRNG:
 
     def choice(self, population):
         """Return the first item from the population."""
-        return list(population)[0]
+        try:
+            return next(self._choice_values)
+        except StopIteration:
+            return self._choice_value
 
     def shuffle(self, items):
         """Reverse the sequence when requested."""
@@ -51,7 +76,10 @@ class ScriptedRNG:
 
     def randrange(self, n):
         """Return the first valid index."""
-        return 0
+        try:
+            return next(self._randrange_values)
+        except StopIteration:
+            return self._randrange_value
 
 
 class FakeCCS:
@@ -181,7 +209,7 @@ def test_generator_cover_generation(default_settings):
     def fake_local_cover(rhs):
         return [[m] for m in rhs]
 
-    gen.sample_local_cover = fake_local_cover
+    gen.sample_local_cover = fake_local_cover  # type: ignore
     cover = gen.generate_causally_secured_cover(measurements, enabling_relations)
     assert sorted(map(sorted, cover)) == sorted([sorted(["A", "B"]), sorted(["A", "C"])])
 
@@ -234,7 +262,7 @@ def test_sample_measurements_and_outcomes_fixed_and_random(
 
     random_gen = CCSGenerator(**deepcopy(default_settings))
     random_gen._generate_measurement_names = lambda n: ["A", "B"]
-    random_gen.rng = ScriptedRNG(randint_values=[2, 1, 2])
+    random_gen.rng = ScriptedRNG(randint_values=[2, 1, 2])  # type: ignore
     measurements, outcomes = random_gen.sample_measurements_and_outcomes()
     assert measurements == ["A", "B"]
     assert outcomes == {"A": [0], "B": [0, 1]}
@@ -243,11 +271,11 @@ def test_sample_measurements_and_outcomes_fixed_and_random(
 def test_weighted_count_sample_boundaries(default_settings):
     """Verify lower-bound and probabilistic sampling branches."""
     gen = CCSGenerator(**deepcopy(default_settings))
-    gen.rng = ScriptedRNG(random_value=0.0)
+    gen.rng = ScriptedRNG(random_value=0.0)  # type: ignore
     assert gen._weighted_count_sample(mean=1.0, min_k=1, max_k=1) == 1
     assert gen._weighted_count_sample(mean=1.0, min_k=1, max_k=3) == 1
 
-    gen.rng = ScriptedRNG(random_value=1.0)
+    gen.rng = ScriptedRNG(random_value=1.0)  # type: ignore
     assert gen._weighted_count_sample(mean=1.0, min_k=1, max_k=3) == 3
 
 
@@ -281,7 +309,7 @@ def test_generate_enabling_relations_without_and_with_ordering(default_settings)
         }
     )
     gen._weighted_count_sample = lambda mean, min_k, max_k: 1
-    gen.rng = ScriptedRNG(random_value=0.0)
+    gen.rng = ScriptedRNG(random_value=0.0)  # type: ignore
     ordered = gen.generate_enabling_relations(measurements, outcomes)
     assert ordered["A"] == []
     assert ordered["B"] == [[{"m": "A", "v": 0}]]
@@ -299,7 +327,7 @@ def test_generate_enabling_relations_without_and_with_ordering(default_settings)
         }
     )
     gen._weighted_count_sample = lambda mean, min_k, max_k: 1
-    gen.rng = ScriptedRNG(random_value=0.0, reverse_shuffle=True)
+    gen.rng = ScriptedRNG(random_value=0.0, reverse_shuffle=True)  # type: ignore
     shuffled = gen.generate_enabling_relations(measurements, outcomes)
     assert shuffled["A"] == [[{"m": "B", "v": 0}]]
     assert shuffled["B"] == [[{"m": "C", "v": 0}]]
@@ -323,7 +351,7 @@ def test_generate_enabling_relations_deduplicates_repeated_relations(default_set
         }
     )
     gen._weighted_count_sample = lambda mean, min_k, max_k: 2
-    gen.rng = ScriptedRNG(random_value=0.0)
+    gen.rng = ScriptedRNG(random_value=0.0)  # type: ignore
     relations = gen.generate_enabling_relations(measurements, outcomes)
     assert relations["A"] == []
     assert relations["B"] == [[{"m": "A", "v": 0}]]
@@ -334,7 +362,7 @@ def test_sample_contexts_covers_all_measurements(default_settings):
     gen = CCSGenerator(**deepcopy(default_settings))
     gen.settings["n_contexts_range"] = [1, 1]
     gen.settings["context_size_range"] = [1, 1]
-    gen.rng = ScriptedRNG(randint_values=[1, 1, 1, 1])
+    gen.rng = ScriptedRNG(randint_values=[1, 1, 1, 1])  # type: ignore
     contexts = gen.sample_contexts(["A", "B", "C"])
 
     covered = {m for context in contexts for m in context}
@@ -400,14 +428,16 @@ def test_ccs_generator_yields_validated_scenarios(default_settings, monkeypatch)
         gen, "sample_measurements_and_outcomes", lambda: (["A", "B"], {"A": [0], "B": [0, 1]})
     )
     monkeypatch.setattr(
-        gen, "generate_enabling_relations", lambda measurements, outcomes: {"A": [], "B": []}
+        gen,
+        "generate_enabling_relations",
+        lambda measurements, outcomes: {"A": [], "B": []},
     )
     monkeypatch.setattr(gen, "sample_contexts", lambda measurements: [["A", "B"]])
 
     scenarios = list(gen._ccs_generator())
     assert len(scenarios) == 2
     assert all(isinstance(ccs, FakeCCS) for ccs in scenarios)
-    assert all(ccs.validated for ccs in scenarios)
+    assert all(ccs.validated for ccs in scenarios)  # type: ignore
     assert scenarios[0].data["ms"][0]["m"] == "A"
     assert scenarios[0].data["c"] == [["A", "B"]]
 
@@ -456,3 +486,245 @@ def test_generate_writes_json_and_jsonl(tmp_path, default_settings, monkeypatch)
     assert len(files) == 2
     assert files[0].read_text().count("\n") == 2
     assert json.loads(files[0].read_text().splitlines()[0]) == {"id": 0}
+
+
+def test_sample_contexts_runs_additional_sampling_loop(default_settings):
+    """Exercise the extra cover-sampling loop."""
+    gen = CCSGenerator(**default_settings)
+    gen.settings["n_contexts_range"] = [3, 3]
+    gen.settings["context_size_range"] = [3, 3]
+    gen.rng = ScriptedRNG(randint_values=[3, 3, 3])  # type: ignore
+
+    contexts = gen.sample_contexts(["A", "B", "C", "D"])
+
+    assert set(m for c in contexts for m in c) == {"A", "B", "C", "D"}
+    assert len(contexts) >= 2
+
+
+def test_sample_contexts_raises_when_no_context_is_possible(default_settings):
+    """Raise when the sampled cover stays empty."""
+    gen = CCSGenerator(**default_settings)
+    gen.settings["n_contexts_range"] = [0, 0]
+    gen.rng = ScriptedRNG(randint_values=[0])  # type: ignore
+
+    with pytest.raises(RuntimeError, match="Failed to sample any contexts"):
+        gen.sample_contexts([])
+
+
+def test_generate_enabling_relations_breaks_when_max_size_is_zero(default_settings):
+    """Hit the early break in enabling-relation sampling."""
+    gen = CCSGenerator(**default_settings)
+    gen.settings["p_has_enabled"] = 1.0
+    gen.settings["n_alternatives_range"] = [1, 1]
+    gen.settings["enabling_relation_size_range"] = [0, 0]
+    gen.rng = ScriptedRNG(random_values=[0.0, 0.0])  # type: ignore
+
+    enabled = gen.generate_enabling_relations(["A", "B"], {"A": [0], "B": [0]})
+
+    assert enabled == {"A": [], "B": []}
+
+
+def test_generate_enabling_relations_skips_empty_outcomes_and_empty_events(default_settings):
+    """Exercise the continue branches in enabling-relation generation."""
+    gen = CCSGenerator(**default_settings)
+    gen.settings["p_has_enabled"] = 1.0
+    gen.settings["n_alternatives_range"] = [1, 1]
+    gen.settings["enabling_relation_size_range"] = [1, 1]
+    gen.rng = ScriptedRNG(random_values=[0.0, 0.0])  # type: ignore
+
+    enabled = gen.generate_enabling_relations(["A", "B"], {"A": [], "B": [0]})
+
+    assert enabled["A"] == []
+    assert enabled["B"] == []
+
+
+def test_generate_local_cover_adds_missing_singletons(default_settings):
+    """Exercise the cleanup branch that restores missing measurements."""
+    gen = CCSGenerator(**default_settings)
+    gen.rng = ScriptedRNG(  # type: ignore
+        random_values=[0.1, 0.5],
+        randint_values=[2],
+        randrange_values=[0],
+        choice_values=["A"],
+    )
+
+    cover = gen._generate_local_cover(["A", "B", "C"], iterations=2)
+
+    flattened = {m for context in cover for m in context}
+    assert flattened == {"A", "B", "C"}
+    assert ["A"] in cover
+
+
+def test_sample_local_cover_uses_static_cover(default_settings):
+    """Exercise the static local-cover lookup path."""
+    gen = CCSGenerator(**default_settings)
+
+    cover = gen.sample_local_cover(["A"])
+
+    assert set(m for context in cover for m in context) == {"A"}
+    assert utils.is_antichain(set(frozenset(context) for context in cover))
+
+
+def test_generate_causally_secured_cover_rejects_conflicting_closure(default_settings):
+    """Reject a transitive closure with conflicting requirements."""
+    gen = CCSGenerator(**default_settings)
+    measurements = ["A", "B", "C", "D"]
+    enabling_relations = {
+        "B": [[{"m": "A", "v": 0}]],
+        "C": [[{"m": "A", "v": 1}]],
+        "D": [[{"m": "B", "v": 0}, {"m": "C", "v": 0}]],
+    }
+
+    with pytest.raises(ValueError, match="Inconsistent enabling relations detected while closing"):
+        gen.generate_causally_secured_cover(measurements, enabling_relations)
+
+
+def test_generate_causally_secured_cover_rejects_unclean_block_when_resampling_fails(
+    default_settings, monkeypatch
+):
+    """Reject a bad local cover when resampling cannot fix it."""
+    gen = CCSGenerator(**default_settings)
+    measurements = ["A", "B"]
+    enabling_relations = {}
+
+    monkeypatch.setattr(gen, "sample_local_cover", lambda rhs: [["A", "B"]])
+    monkeypatch.setattr(gen, "_merge_requirements", lambda left, right: None)
+
+    with pytest.raises(ValueError, match="Failed to sample a clean local cover"):
+        gen.generate_causally_secured_cover(
+            measurements,
+            enabling_relations,
+            allow_unclean_local_covers=False,
+            max_partition_tries=1,
+        )
+
+
+def test_generate_causally_secured_cover_falls_back_to_singletons_when_unclean_allowed(
+    default_settings, monkeypatch
+):
+    """Split an unclean block into singleton contexts when allowed."""
+    gen = CCSGenerator(**default_settings)
+    measurements = ["A", "B"]
+    enabling_relations = {}
+
+    monkeypatch.setattr(gen, "sample_local_cover", lambda rhs: [["A", "B"]])
+    monkeypatch.setattr(gen, "_merge_requirements", lambda left, right: None)
+
+    cover = gen.generate_causally_secured_cover(
+        measurements,
+        enabling_relations,
+        allow_unclean_local_covers=True,
+        max_partition_tries=1,
+    )
+
+    assert sorted(map(tuple, cover)) == [("A",), ("B",)]
+
+
+def test_generate_causally_secured_cover_adds_missing_measurements_when_allowed(
+    default_settings, monkeypatch
+):
+    """Append missing measurements to the final cover when unclean local covers are allowed."""
+    gen = CCSGenerator(**default_settings)
+    measurements = ["A", "B"]
+    enabling_relations = {}
+
+    monkeypatch.setattr(gen, "sample_local_cover", lambda rhs: [["A"]])
+
+    cover = gen.generate_causally_secured_cover(
+        measurements,
+        enabling_relations,
+        allow_unclean_local_covers=True,
+        max_partition_tries=1,
+    )
+
+    assert sorted(map(tuple, cover)) == [("A",), ("B",)]
+
+
+def test_sample_local_cover_uses_generated_cover_for_five_or_more_measurements(
+    default_settings, monkeypatch
+):
+    """Use the non-cached local-cover generator for larger measurement sets."""
+    from quantum_experiment_structures.data.local_covers import LOCAL_COVERS
+
+    gen = CCSGenerator(**default_settings)
+    measurements = [f"M{i}" for i in range(len(LOCAL_COVERS) + 1)]
+
+    called = {"count": 0}
+
+    def fake_generate_local_cover(ms):
+        called["count"] += 1
+        return [[m] for m in ms]
+
+    monkeypatch.setattr(gen, "_generate_local_cover", fake_generate_local_cover)
+
+    cover = gen.sample_local_cover(measurements)
+
+    assert called["count"] == 1
+    assert set(m for context in cover for m in context) == set(measurements)
+
+
+def test_generate_causally_secured_cover_raises_when_no_clean_local_cover_can_be_sampled(
+    default_settings, monkeypatch
+):
+    """Raise when every sampled local cover is rejected as unclean."""
+    gen = CCSGenerator(**default_settings)
+    measurements = ["A", "B"]
+    enabling_relations = {}
+
+    monkeypatch.setattr(gen, "sample_local_cover", lambda rhs: [["A", "B"]])
+    monkeypatch.setattr(gen, "_merge_requirements", lambda left, right: None)
+
+    with pytest.raises(ValueError, match="Failed to sample a clean local cover"):
+        gen.generate_causally_secured_cover(
+            measurements,
+            enabling_relations,
+            allow_unclean_local_covers=False,
+            max_partition_tries=1,
+        )
+
+
+def test_generate_causally_secured_cover_raises_on_internally_inconsistent_block(
+    default_settings, monkeypatch
+):
+    """Raise when a sampled block becomes inconsistent during conversion."""
+    gen = CCSGenerator(**default_settings)
+    measurements = ["A", "B"]
+    enabling_relations = {}
+
+    call_count = {"n": 0}
+
+    def merge_requirements(left, right):
+        call_count["n"] += 1
+        if call_count["n"] <= 2:
+            return {}
+        return None
+
+    monkeypatch.setattr(gen, "sample_local_cover", lambda rhs: [["A", "B"]])
+    monkeypatch.setattr(gen, "_merge_requirements", merge_requirements)
+
+    with pytest.raises(ValueError, match="internally inconsistent"):
+        gen.generate_causally_secured_cover(
+            measurements,
+            enabling_relations,
+            allow_unclean_local_covers=False,
+            max_partition_tries=1,
+        )
+
+
+def test_generate_causally_secured_cover_raises_when_final_cover_missing_measurements(
+    default_settings, monkeypatch
+):
+    """Raise when the final cover misses a measurement and relaxation is disabled."""
+    gen = CCSGenerator(**default_settings)
+    measurements = ["A", "B"]
+    enabling_relations = {}
+
+    monkeypatch.setattr(gen, "sample_local_cover", lambda rhs: [["A"]])
+
+    with pytest.raises(ValueError, match="does not cover all measurements"):
+        gen.generate_causally_secured_cover(
+            measurements,
+            enabling_relations,
+            allow_unclean_local_covers=False,
+            max_partition_tries=1,
+        )
