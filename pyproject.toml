@@ -19,6 +19,7 @@ dependencies = [
     "flake8",
     "flake8-black",
     "graphviz",
+    "jsonschema",
     "numpy",
     "matplotlib",
     "pandas",
