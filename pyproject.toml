@@ -73,6 +73,6 @@ exclude = [
 omit = [
     "quantum_experiment_structures/data/*",
     "quantum_experiment_structures/utils/*generator*.py",
-    "quantum_experiment_structures/utils/plotting_utils.py",
+    "quantum_experiment_structures/utils/*_utils.py",
     "quantum_experiment_structures/__version__.py",
 ]
