@@ -38,6 +38,12 @@
             "uniqueItems": true,
             "minItems": 1
         },
+        "reduced_strategy": {
+            "type": "array",
+            "items": { "$ref": "#/$defs/reduced_assignment" },
+            "uniqueItems": true,
+            "minItems": 1
+        },
         "info_set": { "type": "string" },
         "assignment": {
             "type": "object",
@@ -45,6 +51,20 @@
             "properties": {
                 "i": { "$ref": "#/$defs/info_set" },
                 "a": { "$ref": "#/$defs/action" }
+            },
+            "additionalProperties": false
+        },
+        "reduced_assignment": {
+            "type": "object",
+            "required": ["i", "a"],
+            "properties": {
+                "i": { "$ref": "#/$defs/info_set" },
+                "a": {
+                    "oneOf": [
+                        { "$ref": "#/$defs/action" },
+                        { "type": "null" }
+                    ]
+                }
             },
             "additionalProperties": false
         },
@@ -123,13 +143,32 @@
             "uniqueItems": true,
             "minItems": 1
         },
+        "rs": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "required": ["p", "s"],
+                "properties": {
+                    "p": { "$ref": "#/$defs/player" },
+                    "s": {
+                        "type": "array",
+                        "items": { "$ref": "#/$defs/reduced_strategy" },
+                        "uniqueItems": true,
+                        "minItems": 1
+                    },
+                    "additionalProperties": false
+                }
+            },
+            "uniqueItems": true,
+            "minItems": 1
+        },
         "n": {
             "type": "array",
             "items": { "type": "string" }
         },
         "h": {
             "type": "object",
-            "required": [ "ns", "es", "ps", "as", "is", "z", "u", "s" ],
+            "required": [ "ns", "es", "ps", "as", "is", "z", "u", "s", "rs" ],
             "properties": {
                 "ns": { "type": "string" },
                 "es": { "type": "string" },
@@ -138,7 +177,8 @@
                 "is": { "type": "string" },
                 "z": { "type": "string" },
                 "u": { "type": "string" },
-                "s": { "type": "string" }
+                "s": { "type": "string" },
+                "rs": { "type": "string" }
             },
             "additionalProperties": false
         }
