@@ -4,7 +4,13 @@ import pytest
 import json
 import numpy as np
 
+from quantum_experiment_structures.data.integer_sequences import DEDEKIND_NUMBERS
 from quantum_experiment_structures.utils.utils import (
+    count_enabling_relations_no_duplicates,
+    _count_enabling_relations_no_duplicates,
+    count_enabling_relations,
+    count_covers,
+    count_causal_contextuality_scenarios,
     get_all_subsets,
     is_antichain,
     create_local_covers,
@@ -140,3 +146,121 @@ def test_numpy_encoder_falls_back_to_base_json_encoder():
 
     with pytest.raises(TypeError):
         json.dumps({"x": Unsupported()}, cls=NumpyEncoder)
+
+
+@pytest.mark.parametrize(
+    ("n", "expected"),
+    [
+        (1, 1),
+        (2, 4),
+        (3, 188),
+    ],
+)
+def test_count_enabling_relations_no_duplicates(n, expected):
+    """Count the number of enabling relations without duplicate measurements."""
+    result = count_enabling_relations_no_duplicates(n)
+    assert result == expected
+
+
+@pytest.mark.parametrize(
+    ("n", "expected"),
+    [
+        (1, 1),
+        (2, 5),
+        (3, 835),
+    ],
+)
+def test_count_enabling_relations(n, expected):
+    """Count the number of enabling relations that may contain duplicates."""
+    result = count_enabling_relations(n)
+    assert result == expected
+
+
+@pytest.mark.parametrize(
+    ("n", "expected"),
+    [
+        (1, 1),
+        (2, 2),
+        (3, 9),
+        (4, 114),
+    ],
+)
+def test_count_covers(n, expected):
+    """Count the number of covers (anti-chain and union covers all measurements)."""
+    result = count_covers(n)
+    assert result == expected
+
+
+@pytest.mark.parametrize(
+    ("n", "expected", "expected_with_duplicates"),
+    [
+        (1, 1, 1),
+        (2, 8, 10),
+        (3, 1692, 7515),
+    ],
+)
+def test_count_causal_contextuality_scenarios(n, expected, expected_with_duplicates):
+    """Count the number of causal contextuality scenarios."""
+    result = count_causal_contextuality_scenarios(n, allow_duplicates=False)
+    result_dupe = count_causal_contextuality_scenarios(n, allow_duplicates=True)
+    assert result == expected
+    assert result_dupe == expected_with_duplicates
+    assert result_dupe >= result
+    enabling = count_enabling_relations_no_duplicates(n)
+    enabling_dupe = count_enabling_relations(n)
+    covers = count_covers(n)
+    assert enabling * covers == expected
+    assert enabling_dupe * covers == expected_with_duplicates
+
+
+def test_count_enabling_relations_no_duplicates_negative_n():
+    """Raise for negative n when counting enabling relations without duplicates."""
+    with pytest.raises(ValueError, match="n must be non-negative"):
+        count_enabling_relations_no_duplicates(-1)
+
+
+def test__count_enabling_relations_no_duplicates_negative_prior_measurements():
+    """Raise when receivig a negative amount of prior measuremnts."""
+    with pytest.raises(
+        ValueError,
+        match="prior_measurements must be non-negative",
+    ):
+        _count_enabling_relations_no_duplicates(-1)
+
+
+def test_count_enabling_relations_insufficient_dedekind_numbers():
+    """Complain when there are too few Dedekind numbers to calculate the answer."""
+    # smallest n that violates:
+    # 2 * n - 2 >= len(DEDEKIND_NUMBERS)
+    n = len(DEDEKIND_NUMBERS) // 2 + 1
+
+    with pytest.raises(
+        ValueError,
+        match="Not enough Dedekind numbers are known",
+    ):
+        count_enabling_relations(n)
+
+
+def test_count_covers_insufficient_dedekind_numbers():
+    """Complain some more when there are still too few Dedekind numbers to calculate the answer."""
+    n = len(DEDEKIND_NUMBERS)
+
+    with pytest.raises(
+        ValueError,
+        match="Not enough Dedekind numbers are known",
+    ):
+        count_covers(n)
+
+
+def test_count_causal_contextuality_scenarios_propagates_count_enabling_relations_exception():
+    """Trigger exceptions from top level function."""
+    n = len(DEDEKIND_NUMBERS) // 2 + 1
+
+    with pytest.raises(
+        ValueError,
+        match="Not enough Dedekind numbers are known",
+    ):
+        count_causal_contextuality_scenarios(
+            n,
+            allow_duplicates=True,
+        )

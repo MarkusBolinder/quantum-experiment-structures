@@ -1,12 +1,162 @@
 """Collection of helpful functions and classes."""
 
 import argparse
+from functools import lru_cache
 import itertools
 import json
+import math
 import re
 
 import jsonschema
 import numpy as np
+from quantum_experiment_structures.data.integer_sequences import DEDEKIND_NUMBERS
+
+
+def count_enabling_relations_no_duplicates(n):
+    """Count all enabling relations for n ordered measurements.
+
+    For the i-th measurement (0-indexed), there are i earlier measurements
+    available as possible causes. The number of enabling relations for that
+    measurement is computed by '_count_enabling_relations_no_duplicates(i)'.
+
+    The total number of enabling-relation choices for the full ordered list of
+    n measurements is the product over i = 0, 1, ..., n - 1.
+
+    Args:
+        n: Number of measurements.
+
+    Returns:
+        The total number of enabling-relation configurations, with duplicate
+        outcomes inside a context forbidden.
+
+    Raises:
+        ValueError: If n is negative.
+    """
+    if n < 0:
+        raise ValueError("n must be non-negative.")
+
+    count = 1
+    for prior_measurements in range(n):
+        count *= _count_enabling_relations_no_duplicates(prior_measurements)
+    return count
+
+
+def _count_enabling_relations_no_duplicates(prior_measurements):
+    """Count enabling relations for one measurement.
+
+    A candidate context is a non-empty consistent partial assignment on the
+    prior_measurements earlier measurements. For each earlier measurement,
+    the context may contain:
+      - None: the measurement is absent
+      - 0: outcome 0
+      - 1: outcome 1
+
+    Duplicate outcomes of the same measurement inside one context are
+    forbidden, so contexts are exactly the non-empty elements of
+    {None, 0, 1}^{prior_measurements} with no coordinate conflict.
+
+    Contexts are ordered by extension:
+        a <= b iff every specified coordinate of a agrees with b.
+
+    An enabling relation is an antichain in this poset.
+
+    The empty antichain is allowed and represents the always-enabled case.
+    There is no separate never-enabled case in this count.
+
+    Args:
+        prior_measurements: Number of earlier measurements available as
+            potential causes.
+
+    Returns:
+        The number of antichains in the poset of non-empty consistent contexts.
+
+    Notes:
+        Computationally infeasible for n > 5 most likely.
+    """
+    if prior_measurements < 0:
+        raise ValueError("prior_measurements must be non-negative.")
+
+    contexts = [
+        ctx
+        for ctx in itertools.product((None, 0, 1), repeat=prior_measurements)
+        if any(v is not None for v in ctx)
+    ]
+    k = len(contexts)
+
+    def leq(a, b):
+        """Return True iff a <= b in the order."""
+        return all(x is None or x == y for x, y in zip(a, b))
+
+    comparable = [0] * k
+    for i, x in enumerate(contexts):
+        mask = 0
+        for j, y in enumerate(contexts):
+            if leq(x, y) or leq(y, x):
+                mask |= 1 << j
+        comparable[i] = mask
+
+    @lru_cache(maxsize=None)
+    def count(active_mask):
+        """Count antichains in the induced subposet given by active_mask."""
+        if active_mask == 0:
+            return 1
+
+        pivot = max(
+            (i for i in range(k) if active_mask & (1 << i)),
+            key=lambda i: (comparable[i] & active_mask).bit_count(),
+        )
+
+        without_pivot = active_mask & ~(1 << pivot)
+        without_neighborhood = active_mask & ~comparable[pivot]
+
+        return count(without_pivot) + count(without_neighborhood)
+
+    return count((1 << k) - 1)
+
+
+def count_enabling_relations(n):
+    """Return the number of enabling relations possible.
+
+    This assumes a linearization of the variables and binary outcomes.
+    """
+    if 2 * n - 2 >= len(DEDEKIND_NUMBERS):
+        raise ValueError(
+            "Not enough Dedekind numbers are known to calculate the number of enabling relations "
+            f"for {n=}. Can only support queries for n < {len(DEDEKIND_NUMBERS) / 2 + 1}."
+        )
+    count = 1
+    for i in range(1, n + 1):
+        count *= DEDEKIND_NUMBERS[2 * i - 2] - 1
+    return count
+
+
+def count_covers(n):
+    """Return the number of covers possible for n variables.
+
+    A cover needs to be an anti-chain, and it needs to include all the variables. The formula this
+    function uses can be derived using the principle of inclusion-exclusion.
+    """
+    if n >= len(DEDEKIND_NUMBERS):
+        raise ValueError(
+            f"Not enough Dedekind numbers are known to calculate the number of covers for {n=} "
+            f"Can only support queries for n < {len(DEDEKIND_NUMBERS)}."
+        )
+    count = 0
+    for k in range(0, n + 1):
+        count += (-1) ** k * math.comb(n, k) * DEDEKIND_NUMBERS[n - k]
+    return count
+
+
+def count_causal_contextuality_scenarios(n, allow_duplicates=False):
+    """Return the number of causal contextuality scenarios for n variables.
+
+    This assumes that the outcomes are binary (0 or 1) and that the variables are linearized,
+    meaning that the enabling relations cannot exhibit cycles.
+    """
+    enabling_relations_counter = (
+        count_enabling_relations if allow_duplicates else count_enabling_relations_no_duplicates
+    )
+    return enabling_relations_counter(n) * count_covers(n)
 
 
 def get_all_subsets(measurements):
@@ -38,6 +188,8 @@ def create_local_covers(measurements):
 
     Notes:
         Closely related to Sperner families: https://en.wikipedia.org/wiki/Sperner_family
+        It is possible to express the number of local covers for n variables using the Dedekind
+        numbers. See the function 'count_covers' above.
     """
     if len(measurements) > 4:
         raise ValueError(
@@ -175,7 +327,9 @@ def extend_with_default(validator_class):
 
         yield from validate_properties(validator, properties, instance, schema)
 
-    return jsonschema.validators.extend(validator_class, {"properties": set_defaults})
+    return jsonschema.validators.extend(  # type: ignore
+        validator_class, {"properties": set_defaults}
+    )
 
 
 DefaultValuesValidator = extend_with_default(jsonschema.Draft202012Validator)
