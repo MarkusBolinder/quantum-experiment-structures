@@ -123,6 +123,10 @@ class CCSGenerator:
                 If False, impose lexicographic ordering on measurements
                 when constructing enabling relations to guarantee
                 acyclicity. Otherwise, a random order is used.
+            causally_secured (bool):
+                If True, force the generated cover to be causally secured.
+                Note that this will override all the options relating to
+                the number of contexts and their size.
 
     Notes:
         A causal contextuality scenario consists of:
@@ -178,6 +182,7 @@ class CCSGenerator:
         self.rng = random.Random(self.seed)
         self.output_dir = self.settings.pop("output_dir")
         self.n_contexts_per_causal_structure = self.settings.pop("n_samples_per_causal_structure")
+        self.causally_secured = self.settings.pop("causally_secured")
         self.n_scenarios = self.settings.pop("n_scenarios")
         self.batch_size = self.settings.pop("batch_size")
 
@@ -287,8 +292,29 @@ class CCSGenerator:
 
             for _ in range(self.n_contexts_per_causal_structure):
                 # 3) randomly sample a number of subsets of the contexts and union must equal cover
-                contexts = self.sample_contexts(measurements)
-                cover = utils.create_anti_chain(contexts)
+                if self.causally_secured:
+                    # FIXME: the probability of a random causal structure allowing a causally
+                    # secured cover to be generated is not 100%, which means that we should
+                    # generate the causally secured cover in a smarter way
+                    tries = 100
+                    for _ in range(tries):
+                        try:
+                            cover = self.generate_causally_secured_cover(
+                                measurements, enabling_relations_dict
+                            )
+                            break
+                        except Exception:
+                            enabling_relations_dict = self.generate_enabling_relations(
+                                measurements, outcomes
+                            )
+                    else:
+                        raise ValueError(
+                            "Failed to generate a causal cover. "
+                            f"Tried to change the enabling relations {tries} times."
+                        )
+                else:
+                    contexts = self.sample_contexts(measurements)
+                    cover = utils.create_anti_chain(contexts)
 
                 # 4) construct the scenario dict
                 scenario = {
@@ -299,7 +325,7 @@ class CCSGenerator:
                             "o": [
                                 {
                                     "v": v,
-                                    # calclate leaf below, in 5)
+                                    # calculate leaf below, in 5)
                                 }
                                 for v in outcomes[measurement]
                             ],
@@ -321,7 +347,8 @@ class CCSGenerator:
                         # TODO: could just return here probably
                         break
 
-    def _generate_measurement_names(self, n):
+    @staticmethod
+    def _generate_measurement_names(n):
         """Create an ordered of measurement names of length n following a spreadsheet-like scheme.
 
         Names are generated lexicographically from the uppercase Latin alphabet:
@@ -339,7 +366,7 @@ class CCSGenerator:
         alphabet = string.ascii_uppercase
         width = 1
         while len(names) < n:
-            for tup in self._tuple_letter_generator(alphabet, width):
+            for tup in CCSGenerator._tuple_letter_generator(alphabet, width):
                 names.append("".join(tup))
                 if len(names) >= n:
                     break
@@ -347,7 +374,8 @@ class CCSGenerator:
         # this can become very memory-intense if n is too large
         return names[:n]
 
-    def _tuple_letter_generator(self, alphabet, width):
+    @staticmethod
+    def _tuple_letter_generator(alphabet, width):
         """Yield lexicographic tuples of letters of a fixed width.
 
         This generator yields tuples such as ('A',), ('B',), ..., or for width=2 yields
