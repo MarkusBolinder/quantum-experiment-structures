@@ -667,7 +667,7 @@ def test_game_strategies_and_adders(valid_game_data):
     assert game.check_reduced_strategies_consistency() is True
 
     game.add_human_readable()
-    assert set(game.data["h"]) == {"ns", "es", "ps", "as", "is", "z", "u", "s"}
+    assert set(game.data["h"]) == {"ns", "es", "ps", "as", "is", "z", "u", "s", "rs"}
     assert "ns" in repr(game)
 
 
@@ -692,8 +692,8 @@ def test_game_strategy_failures(valid_game_data):
         SpacetimeGame(duplicate_strategy).check_strategies_consistency()
 
     bad_reduced = deepcopy(valid_game_data)
-    bad_reduced["rs"] = [{"p": "Alice", "s": [[{"i": "I1", "a": "⟂"}]]}]
-    with pytest.raises(ValueError, match="reachable but assigned '⟂'"):
+    bad_reduced["rs"] = [{"p": "Alice", "s": [[{"i": "I1", "a": None}]]}]
+    with pytest.raises(ValueError, match="reachable but assigned None"):
         SpacetimeGame(bad_reduced).check_reduced_strategies_consistency()
 
     bad_reduced_action = deepcopy(valid_game_data)
@@ -971,7 +971,7 @@ def test_add_reduced_strategies_generates_expected_reachability_split(valid_alte
 
     assert bob_strategies == {
         frozenset({("IB0", "L"), ("IB1", "b")}),
-        frozenset({("IB0", "R"), ("IB1", "⟂")}),
+        frozenset({("IB0", "R"), ("IB1", None)}),
     }
     assert alfred_strategies == {
         frozenset({("IA0", "a"), ("IA1", "a"), ("IA2", "b")}),
@@ -985,14 +985,29 @@ def test_add_reduced_strategies_generates_expected_reachability_split(valid_alte
         ([{"p": "Eve", "s": []}], "unknown player"),
         ([{"p": "Bob", "s": [[{"i": "IA0", "a": "a"}]]}], "foreign info set"),
         ([{"p": "Bob", "s": [[{"i": "IB0", "a": "invalid"}]]}], "Invalid action"),
-        ([{"p": "Bob", "s": [[{"i": "IB0", "a": "⟂"}]]}], "reachable but assigned '⟂'"),
+        (
+            [{"p": "Bob", "s": [[{"i": "IB0", "a": None}, {"i": "IB1", "a": None}]]}],
+            "reachable but assigned None",
+        ),
         (
             [{"p": "Bob", "s": [[{"i": "IB0", "a": "R"}, {"i": "IB1", "a": "b"}]]}],
             "not reachable but assigned real action",
         ),
         (
-            [{"p": "Bob", "s": [[{"i": "IB0", "a": "L"}], [{"i": "IB0", "a": "L"}]]}],
+            [
+                {
+                    "p": "Bob",
+                    "s": [
+                        [{"i": "IB0", "a": "R"}, {"i": "IB1", "a": None}],
+                        [{"i": "IB0", "a": "R"}, {"i": "IB1", "a": None}],
+                    ],
+                }
+            ],
             "Duplicate reduced strategy",
+        ),
+        (
+            [{"p": "Bob", "s": [[{"i": "IB0", "a": "L"}]]}],
+            "not present in the strategy",
         ),
     ],
 )

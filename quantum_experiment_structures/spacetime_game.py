@@ -383,7 +383,7 @@ class SpacetimeGame:
 
         Checks:
             1. Basic structure: player matching and valid action choices.
-            2. Reachability: ⟂ is only used for non-activated sets; real actions
+            2. Reachability: None is only used for non-activated sets; real actions
                are only used for activated sets.
             3. Uniqueness: No duplicate reduced strategies for a player.
 
@@ -416,7 +416,7 @@ class SpacetimeGame:
                             f"Player '{player}' strategy contains foreign info set '{iset_id}'."
                         )
 
-                    if action != "⟂" and action not in self.info_sets[iset_id]["a"]:
+                    if action is not None and action not in self.info_sets[iset_id]["a"]:
                         raise ValueError(f"Invalid action '{action}' in info set '{iset_id}'.")
 
                     strategy_map[iset_id] = action
@@ -427,17 +427,22 @@ class SpacetimeGame:
 
                 # 3) verify reachability/bottom consistency
                 for iset_id in player_isets:
-                    action = strategy_map.get(iset_id)
+                    # make the default return 'False' instead of 'None' since None is used to
+                    # represent the 'no assigned action' case (bottom symbol)
+                    action = strategy_map.get(iset_id, False)
+                    if action is False:
+                        raise ValueError(
+                            f"Information set '{iset_id}' is not present "
+                            f"in the strategy for player {player}."
+                        )
                     is_active = iset_id in activated
 
-                    if is_active and action == "⟂":
+                    if is_active and action is None:
                         raise ValueError(
-                            f"Information set '{iset_id}' is reachable "
-                            f"but assigned '⟂' in strategy: {strategy}"
+                            f"Information set '{iset_id}' is reachable but assigned None "
+                            f"in strategy: {strategy}"
                         )
-                    # TODO: change schema to include reduced strategies and then allow them to be
-                    # 'null', which will be used instead of the bottom symbol.
-                    if not is_active and (action != "⟂" and action is not None):
+                    if not is_active and action is not None:
                         raise ValueError(
                             f"Information set '{iset_id}' is not reachable "
                             f"but assigned real action '{action}' in strategy: {strategy}"
@@ -676,9 +681,8 @@ class SpacetimeGame:
                     # base case: no more reachable nodes to decide for
                     final_strategy = []
                     for i in player_isets:
-                        # assign action if activated, else bottom
-                        # TODO: should probably use None instead of '⟂' and update schema
-                        action = current_map.get(i, "⟂")
+                        # assign action if activated, else bottom (represented by None)
+                        action = current_map.get(i, None)
                         final_strategy.append({"i": i, "a": action})
 
                     content = frozenset(tuple(assignment.values()) for assignment in final_strategy)
@@ -759,6 +763,24 @@ class SpacetimeGame:
             s_list.append(f"S_{player} = {{{', '.join(strategies)}}}")
         s_representation = ", ".join(s_list) if s_list else "∅"
 
+        # 8. rs: reduced strategies, actions may be null/None/⟂ (not reachable in that strategy)
+        rs_list = []
+        for reduced_strategy_group in self.data.get("rs", []):
+            player = reduced_strategy_group["p"]
+            reduced_strategies = []
+            for reduced_strategy in reduced_strategy_group["s"]:
+                assignments = (
+                    "{"
+                    + ", ".join(
+                        f"({a['i']}, {a['a'] if a['a'] is not None else '⟂'})"
+                        for a in reduced_strategy
+                    )
+                    + "}"
+                )
+                reduced_strategies.append(assignments)
+            rs_list.append(f"RS_{player} = {{{', '.join(reduced_strategies)}}}")
+        rs_representation = ", ".join(rs_list) if rs_list else "∅"
+
         self.data["h"] = {
             "ns": ns_representation,
             "es": es_representation,
@@ -768,6 +790,7 @@ class SpacetimeGame:
             "z": z_representation,
             "u": u_representation,
             "s": s_representation,
+            "rs": rs_representation,
         }
 
     def all_checks(self):
