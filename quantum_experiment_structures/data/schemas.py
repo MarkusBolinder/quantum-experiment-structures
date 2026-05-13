@@ -108,6 +108,7 @@ CCS_GENERATOR_SETTINGS_SCHEMA = {
         "no_lexicographic_order": {"type": "boolean", "default": False},
         "output_dir": {"oneOf": [{"type": "string"}, {"type": "null"}], "default": None},
         "batch_size": {"type": "integer", "default": 1, "minimum": 1},
+        "causally_secured": {"type": "boolean", "default": False},
         "n_scenarios": {"type": "integer", "default": 1, "minimum": 1},
         "seed": {"oneOf": [{"type": "integer"}, {"type": "null"}], "default": None},
     },
