@@ -1,11 +1,16 @@
 """Unit tests for the utils.utils module."""
 
+import sys
+
 import pytest
 import json
 import numpy as np
 
 from quantum_experiment_structures.data.integer_sequences import DEDEKIND_NUMBERS
 from quantum_experiment_structures.utils.utils import (
+    json_file_size,
+    json_size_bytes,
+    get_json_obj_size,
     count_enabling_relations_no_duplicates,
     _count_enabling_relations_no_duplicates,
     count_enabling_relations,
@@ -264,3 +269,98 @@ def test_count_causal_contextuality_scenarios_propagates_count_enabling_relation
             n,
             allow_duplicates=True,
         )
+
+
+def test_json_file_size_reads_exact_file_size(tmp_path):
+    """Read the correct size of JSON file written to disk."""
+    path = tmp_path / "payload.json"
+    payload = '{"snowman":"☃","x":1}'
+    path.write_text(payload, encoding="utf-8")
+
+    assert json_file_size(path) == len(payload.encode("utf-8"))
+
+
+def test_json_file_size_raises_for_missing_file(tmp_path):
+    missing = tmp_path / "missing.json"
+
+    with pytest.raises(FileNotFoundError):
+        json_file_size(missing)
+
+
+@pytest.mark.parametrize(
+    "obj, expected",
+    [
+        ({"a": 1, "b": [2, 3]}, len('{"a":1,"b":[2,3]}'.encode("utf-8"))),
+        ({"snowman": "☃"}, len('{"snowman":"\\u2603"}'.encode("utf-8"))),
+        ([True, None, 1.5], len("[true,null,1.5]".encode("utf-8"))),
+    ],
+)
+def test_json_size_bytes_matches_compact_json_encoding(obj, expected):
+    """Determine JSON file size of an object that has not been written to disk yet."""
+    assert json_size_bytes(obj) == expected
+
+
+def test_get_json_obj_size_handles_nested_structures_and_shared_references(monkeypatch):
+    """Find the in-memory size of nested Python objects."""
+
+    def fake_getsizeof(x):
+        """Dummy method for returning deterministic sizes of ojects."""
+        if isinstance(x, dict):
+            return 10
+        if isinstance(x, list):
+            return 20
+        if isinstance(x, tuple):
+            return 30
+        if isinstance(x, str):
+            return 4 + len(x)
+        if isinstance(x, (int, float, bool)) or x is None:
+            return 1
+        return 7
+
+    monkeypatch.setattr(sys, "getsizeof", fake_getsizeof)
+
+    shared = [1]
+    obj = {
+        "k": [1, (2, "ab"), True, None, 3.5],
+        "shared_1": shared,
+        "shared_2": shared,
+    }
+
+    # dict: 10
+    # keys: "k"=5, "shared_1"=12, "shared_2"=12
+    # list under "k": 20 + 1 + (tuple 30 + 1 + 6) + 1 + 1 + 1 = 61
+    # shared list counted once: 20 + 1 = 21
+    expected = 10 + 5 + 61 + 12 + 21 + 12
+    assert get_json_obj_size(obj) == expected
+
+
+def test_get_json_obj_size_avoids_double_counting_cycles(monkeypatch):
+    """Avoid counting cyclically referenced objects more than once."""
+    monkeypatch.setattr(sys, "getsizeof", lambda x: 20)
+
+    cycle = []
+    cycle.append(cycle)
+
+    assert get_json_obj_size(cycle) == 20
+
+
+def test_get_json_obj_size_supports_dict_tuple_and_scalars(monkeypatch):
+    """Test the range of support for JSON object size finding function."""
+
+    def fake_getsizeof(x):
+        """Dummy method for returning deterministic sizes of ojects."""
+        if isinstance(x, dict):
+            return 10
+        if isinstance(x, tuple):
+            return 30
+        if isinstance(x, str):
+            return 4 + len(x)
+        if isinstance(x, (int, float, bool)) or x is None:
+            return 1
+        return 7
+
+    monkeypatch.setattr(sys, "getsizeof", fake_getsizeof)
+
+    obj = {"x": (1, "ab", False, None, 3.5)}
+    expected = 10 + 5 + (30 + 1 + 6 + 1 + 1 + 1)
+    assert get_json_obj_size(obj) == expected

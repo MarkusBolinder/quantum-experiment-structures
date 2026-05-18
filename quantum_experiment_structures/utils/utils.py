@@ -1,15 +1,60 @@
 """Collection of helpful functions and classes."""
 
 import argparse
+from collections.abc import Mapping
 from functools import lru_cache
 import itertools
 import json
 import math
+from pathlib import Path
 import re
+import sys
 
 import jsonschema
 import numpy as np
 from quantum_experiment_structures.data.integer_sequences import DEDEKIND_NUMBERS
+
+
+def json_file_size(path):
+    """Return JSON file size in bytes."""
+    return Path(path).stat().st_size
+
+
+def json_size_bytes(obj):
+    """Return serialized JSON size in bytes."""
+    # NOTE: this specification of separtors eliminates whitespace (default is ", " and ": "),
+    # so the value given by this function will be a lower bound.
+    return len(json.dumps(obj, separators=(",", ":")).encode("utf-8"))
+
+
+def get_json_obj_size(obj):
+    """Return approximate in-memory size of a JSON-like object in bytes.
+
+    The following types are supported.
+      - dict
+      - list / tuple
+      - str
+      - int / float / bool / None
+    """
+    seen = set()
+
+    def sizeof(x):
+        if not isinstance(x, (bool, int, float)) or x is None:
+            obj_id = id(x)
+            if obj_id in seen:
+                return 0
+            seen.add(obj_id)
+
+        size = sys.getsizeof(x)
+
+        if isinstance(x, Mapping):
+            size += sum(sizeof(k) + sizeof(v) for k, v in x.items())
+        elif isinstance(x, (list, tuple)):
+            size += sum(sizeof(item) for item in x)
+
+        return size
+
+    return sizeof(obj)
 
 
 def count_enabling_relations_no_duplicates(n):
