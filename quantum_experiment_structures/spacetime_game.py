@@ -870,7 +870,7 @@ class SpacetimeGame:
         }
         return cls(spacetime_game_data)
 
-    def convert_to_extensive_game(self, linearization=None, default_utility=0, match_utility=True):
+    def to_extensive_game(self, linearization=None, default_utility=0, match_utility=True):
         """Convert to a game in extensive form with imperfect information.
 
         The conversion is done by following a linearization of the spacetime game and recursively

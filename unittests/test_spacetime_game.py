@@ -1112,12 +1112,12 @@ def test_from_process_matrix_rejects_cycles(pmf_cycle_data):
         SpacetimeGame.from_process_matrix(deepcopy(pmf_cycle_data))
 
 
-def test_convert_to_extensive_game_timelike_and_utilities(timelike_game_data):
+def test_to_extensive_game_timelike_and_utilities(timelike_game_data):
     """Verify timelike separation and terminal utilities in the extensive conversion."""
     game = SpacetimeGame(deepcopy(timelike_game_data))
     player_order = list(game.players)
 
-    tree = game.convert_to_extensive_game(linearization=["N1", "N2"], match_utility=True)
+    tree = game.to_extensive_game(linearization=["N1", "N2"], match_utility=True)
 
     assert tree["kind"] == "choice"
     assert len(tree["Children"]) == 2
@@ -1137,12 +1137,12 @@ def test_convert_to_extensive_game_timelike_and_utilities(timelike_game_data):
     assert right_leaves == expected_right
 
 
-def test_convert_to_extensive_game_spacelike_independence(spacelike_game_data):
+def test_to_extensive_game_spacelike_independence(spacelike_game_data):
     """Verify spacelike separation keeps the second root choice independent of the first."""
     game = SpacetimeGame(deepcopy(spacelike_game_data))
     player_order = list(game.players)
 
-    tree = game.convert_to_extensive_game(linearization=["N1", "N2"], match_utility=True)
+    tree = game.to_extensive_game(linearization=["N1", "N2"], match_utility=True)
 
     assert tree["kind"] == "choice"
     assert len(tree["Children"]) == 2
@@ -1158,12 +1158,12 @@ def test_convert_to_extensive_game_spacelike_independence(spacelike_game_data):
     assert left_leaves == right_leaves == expected
 
 
-def test_convert_to_extensive_game_imperfect_information(imperfect_info_game_data):
+def test_to_extensive_game_imperfect_information(imperfect_info_game_data):
     """Verify imperfect information reuses the same information-set label across branches."""
     game = SpacetimeGame(deepcopy(imperfect_info_game_data))
     player_order = list(game.players)
 
-    tree = game.convert_to_extensive_game(linearization=["N1", "N2a", "N2b"], match_utility=True)
+    tree = game.to_extensive_game(linearization=["N1", "N2a", "N2b"], match_utility=True)
 
     assert tree["kind"] == "choice"
     assert len(tree["Children"]) == 2
@@ -1186,13 +1186,11 @@ def test_convert_to_extensive_game_imperfect_information(imperfect_info_game_dat
     assert right_leaves == expected_right
 
 
-def test_convert_to_extensive_game_combined_structure(combined_game_data):
+def test_to_extensive_game_combined_structure(combined_game_data):
     """Verify mixed timelike, spacelike, and imperfect-information structure."""
     game = SpacetimeGame(deepcopy(combined_game_data))
 
-    tree = game.convert_to_extensive_game(
-        linearization=["N1", "N3", "N2a", "N2b"], match_utility=False
-    )
+    tree = game.to_extensive_game(linearization=["N1", "N3", "N2a", "N2b"], match_utility=False)
 
     assert tree["kind"] == "choice"
     assert len(tree["Children"]) == 2
@@ -1340,10 +1338,10 @@ def test_from_process_matrix_rejects_empty_cpmaps(valid_pmf_data):
         SpacetimeGame.from_process_matrix(data)
 
 
-def test_convert_to_extensive_game_without_linearization(valid_game_data):
+def test_to_extensive_game_without_linearization(valid_game_data):
     """Use the built-in topological linearization."""
     game = SpacetimeGame(deepcopy(valid_game_data))
-    ext = game.convert_to_extensive_game()
+    ext = game.to_extensive_game()
     assert ext["kind"] in {"choice", "outcome"}
 
 
