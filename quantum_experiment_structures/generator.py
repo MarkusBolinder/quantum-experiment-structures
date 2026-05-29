@@ -127,6 +127,10 @@ class CCSGenerator:
                 If True, force the generated cover to be causally secured.
                 Note that this will override all the options relating to
                 the number of contexts and their size.
+            consistent_relations (bool):
+                If True, force the generated enabling relations to all contain
+                consistent sets of events. That is no measurement is present
+                in a relation, with different outcomes.
 
     Notes:
         A causal contextuality scenario consists of:
@@ -287,32 +291,23 @@ class CCSGenerator:
         while i < self.n_scenarios:
             # 1) determine how many measurements and outcomes per measurement and which values
             measurements, outcomes = self.sample_measurements_and_outcomes()
-            # 2) randomly create causal structure
-            enabling_relations_dict = self.generate_enabling_relations(measurements, outcomes)
-
             for _ in range(self.n_contexts_per_causal_structure):
-                # 3) randomly sample a number of subsets of the contexts and union must equal cover
+                # 2) randomly create causal structure / cover
                 if self.causally_secured:
-                    # FIXME: the probability of a random causal structure allowing a causally
-                    # secured cover to be generated is not 100%, which means that we should
-                    # generate the causally secured cover in a smarter way
-                    tries = 100
-                    for _ in range(tries):
-                        try:
-                            cover = self.generate_causally_secured_cover(
-                                measurements, enabling_relations_dict
-                            )
-                            break
-                        except Exception:
-                            enabling_relations_dict = self.generate_enabling_relations(
-                                measurements, outcomes
-                            )
-                    else:
-                        raise ValueError(
-                            "Failed to generate a causal cover. "
-                            f"Tried to change the enabling relations {tries} times."
-                        )
+                    enabling_relations_dict = self.generate_enabling_relations(
+                        measurements,
+                        outcomes,
+                        force_unique_bridges=True,
+                    )
+                    cover = self.generate_causally_secured_cover(
+                        measurements, enabling_relations_dict
+                    )
                 else:
+                    enabling_relations_dict = self.generate_enabling_relations(
+                        measurements,
+                        outcomes,
+                        consistent_relations=self.settings["consistent_relations"],
+                    )
                     contexts = self.sample_contexts(measurements)
                     cover = utils.create_anti_chain(contexts)
 
@@ -526,7 +521,9 @@ class CCSGenerator:
                 return k
         return max_k
 
-    def generate_enabling_relations(self, measurements, outcomes):
+    def generate_enabling_relations(
+        self, measurements, outcomes, force_unique_bridges=False, consistent_relations=False
+    ):
         """Construct a consistent, acyclic set of enabling relations for each measurement.
 
         An enabling relation for a target measurement is a (non-empty) set of events; each event is
@@ -553,6 +550,11 @@ class CCSGenerator:
             outcomes (dict[str, Sequence[int]]): Mapping from measurement name to list/sequence of
                 allowed outcome values (integers). Values are sampled uniformly when creating
                 events.
+            force_unique_bridges: if True, each measurement gets at most one enabling relation
+                and that relation contains exactly one event. This is used by the causally-secured
+                generation path to guarantee a clean construction on the first try.
+            consistent_relations: if True, force the generated enabling relations to all contain a
+                consistent set of events under the transitive closure.
 
         Returns:
             dict[str, list[list[dict]]]: A mapping from each measurement name to a list of
@@ -567,6 +569,8 @@ class CCSGenerator:
             - Duplicate enabling relations (same multiset of (m,v) pairs) are avoided.
             - If no earlier measurements exist in the imposed order, the target has no enablers.
         """
+        # TODO: refactor this method and move the nested functions out to standalone methods to
+        # improve readability and code duplication
         p_has_enabled = self.settings["p_has_enabled"]
         n_alternatives_mean = self.settings["n_alternatives_mean"]
         enabling_relation_size_mean = self.settings["enabling_relation_size_mean"]
@@ -591,11 +595,54 @@ class CCSGenerator:
             allowed = [m for m in measurements if pos[m] < target_pos]
             return allowed
 
+        def sample_consistent_relation(allowed_enablers, closure_req):
+            """Sample a relation whose transitive requirements merge consistently.
+
+            The method greedily adds compatible events. This avoids retrying whole causal
+            structures and checks consistency as it builds the relation.
+            """
+            max_size = min(max_relation_size, len(allowed_enablers))
+            min_size = min(min_relation_size, max_size)
+
+            target_size = self._weighted_count_sample(
+                enabling_relation_size_mean, min_size, max_size
+            )
+
+            shuffled = list(allowed_enablers)
+            self.rng.shuffle(shuffled)
+
+            req = dict()
+            events = []
+
+            for m in shuffled:
+                if len(events) >= target_size:
+                    break
+
+                vals = outcomes[m]
+                v = self.rng.choice(list(vals))
+
+                candidate_req = self._merge_requirements(req, closure_req[m])
+                if candidate_req is None:
+                    continue
+
+                candidate_req = self._merge_requirements(candidate_req, {m: v})
+                if candidate_req is None:
+                    continue
+
+                req = candidate_req
+                events.append({"m": m, "v": v})
+
+            if not events:
+                return None, None
+
+            return events, req
+
         enabled_by = dict()
+        closure_req = defaultdict(dict)  # transitive closure requirements for each measurement
 
         for target in measurements:
             enabled_by[target] = []
-            # decide whether target has any enabling relations at all
+
             if self.rng.random() >= p_has_enabled:
                 continue  # enabled by default/empty set
 
@@ -604,50 +651,77 @@ class CCSGenerator:
             if not allowed_enablers:
                 continue
 
+            if force_unique_bridges:
+                relation, req = sample_consistent_relation(allowed_enablers, closure_req)
+                if relation is not None:
+                    enabled_by[target] = [relation]
+                    closure_req[target] = req  # type: ignore
+                continue
+
             # number of alternative enabling relations for this target measurement
             n_alts = self._weighted_count_sample(
                 n_alternatives_mean, min_alternatives, max_alternatives
             )
 
+            # TODO: this code is quite messy; should be cleaned up
             alt_list = []
             used_enabling_relations = set()
+            target_closure = dict()
 
             for _ in range(n_alts):
-                # sample enabling_relation size (at least 1)
-                max_size = min(max_relation_size, len(allowed_enablers))
-                min_size = min(min_relation_size, max_size)
-                if max_size <= 0:
-                    break
-                enabling_relation_size = self._weighted_count_sample(
-                    enabling_relation_size_mean, min_size, max_size
-                )
-
-                # choose distinct enabler measurements for this enabling_relation
-                # if enabling_relation_size > len(allowed_enablers) it will be limited above
-                enablers = self.rng.sample(allowed_enablers, enabling_relation_size)
-
-                # for each enabling measurement, pick a value uniformly from its outcomes
-                events = []
-                seen_measurements = set()
-                for m in enablers:
-                    vals = outcomes.get(m)
-                    if m in seen_measurements or not vals:
-                        # skip if the measurement is already present in the enabling relation OR
-                        # if the measurement does not have any outcomes (but this should not happen)
+                if consistent_relations:
+                    relation, req = sample_consistent_relation(allowed_enablers, closure_req)
+                    if relation is None:
                         continue
-                    v = self.rng.choice(list(vals))
-                    seen_measurements.add(m)
-                    events.append({"m": m, "v": int(v)})
 
-                if not events:
-                    continue
+                    enabling_relation = frozenset(tuple(e.values()) for e in relation)
+                    if enabling_relation in used_enabling_relations:
+                        continue
 
-                enabling_relation = frozenset((e["m"], e["v"]) for e in events)
-                # skip duplicate enabling relations.
-                if enabling_relation in used_enabling_relations:
-                    continue
-                used_enabling_relations.add(enabling_relation)
-                alt_list.append(events)
+                    used_enabling_relations.add(enabling_relation)
+                    alt_list.append(relation)
+
+                    # keep the first consistent closure as a conservative summary
+                    if not target_closure:
+                        target_closure = req
+
+                else:
+                    # sample enabling_relation size (at least 1)
+                    max_size = min(max_relation_size, len(allowed_enablers))
+                    min_size = min(min_relation_size, max_size)
+                    if max_size <= 0:
+                        break
+                    enabling_relation_size = self._weighted_count_sample(
+                        enabling_relation_size_mean, min_size, max_size
+                    )
+
+                    # choose distinct enabler measurements for this enabling_relation
+                    # if enabling_relation_size > len(allowed_enablers) it will be limited above
+                    enablers = self.rng.sample(allowed_enablers, enabling_relation_size)
+
+                    # for each enabling measurement, pick a value uniformly from its outcomes
+                    events = []
+                    seen_measurements = set()
+                    for m in enablers:
+                        vals = outcomes[m]
+                        if m in seen_measurements or not vals:
+                            continue
+                        v = self.rng.choice(list(vals))
+                        seen_measurements.add(m)
+                        events.append({"m": m, "v": v})
+
+                    if not events:
+                        continue
+
+                    enabling_relation = frozenset(tuple(e.values()) for e in events)
+                    # skip duplicate enabling relations.
+                    if enabling_relation in used_enabling_relations:
+                        continue
+                    used_enabling_relations.add(enabling_relation)
+                    alt_list.append(events)
+
+            enabled_by[target] = alt_list
+            closure_req[target] = target_closure  # type: ignore
 
             # if alt_list is empty, then target does not have any enabling relations
             # this means that we can simply assign target's enabling relations to alt_list
@@ -673,7 +747,6 @@ class CCSGenerator:
                 measurements is an ordered list of measurement names and outcomes maps each
                 measurement to a list of integer outcome values.
         """
-        # TODO: add check about anti-chain and also read about it
         # TODO: allow fixed measurements, random outcomes; random measurements, fixed outcomes
         # currently, both are either are random, or both fixed if measurement_outcomes_dict != None
         min_measurements, max_measurements = self.settings["n_measurements_range"]
@@ -780,6 +853,59 @@ class CCSGenerator:
 
         return sorted([sorted(list(c)) for c in current_cover])
 
+    def _block_requirement(self, block, closure_req):
+        """Return the merged closure requirement of all measurements in a block."""
+        req = dict()
+        for m in block:
+            req = self._merge_requirements(req, closure_req[m])
+            if req is None:
+                return None
+        return req
+
+    def _compatible_block_indices(self, candidate, block_reqs, closure_req):
+        """Return indices of blocks that can accept 'candidate' without inconsistency."""
+        compatible = []
+        candidate_req = closure_req[candidate]
+        for idx, req in enumerate(block_reqs):
+            if self._merge_requirements(req, candidate_req) is not None:
+                compatible.append(idx)
+        return compatible
+
+    def _build_clean_local_cover(self, measurements, closure_req):
+        """Construct a random clean local cover.
+
+        Samples a clean partition of the measurements into blocks.
+        Every clean local cover should be reachable, with nonzero probability.
+        """
+        if not measurements:
+            return []
+
+        order = list(measurements)
+        self.rng.shuffle(order)
+
+        blocks = []
+        block_reqs = []
+
+        for m in order:
+            compatible = self._compatible_block_indices(m, block_reqs, closure_req)
+
+            # allowing a new block makes all possible local covers reachable
+            options = list(compatible)
+            options.append(None)
+
+            chosen = self.rng.choice(options)
+
+            # ensure that the chosen measurement for the context has all measurements in its
+            # transitive closure support
+            if chosen is None:
+                blocks.append([m])
+                block_reqs.append(dict(closure_req[m]))
+            else:
+                blocks[chosen].append(m)
+                block_reqs[chosen] = self._merge_requirements(block_reqs[chosen], closure_req[m])
+
+        return [sorted(block) for block in blocks]
+
     def sample_local_cover(self, measurements):
         # TODO: how should the number of iterations be handled?
         if len(measurements) <= len(LOCAL_COVERS):
@@ -798,15 +924,15 @@ class CCSGenerator:
         measurements,
         enabling_relations_dict,
         allow_unclean_local_covers=False,
-        max_partition_tries=100,
     ):
-        """Generate a causally secured cover using random local covers.
+        """Generate a causally secured cover.
 
-        This method assumes unique causal bridges:
-        each measurement has either zero or one enabling relation.
+        The secured path is constructive: when dirty local covers are not allowed, local blocks are
+        built as cliques in the compatibility graph induced by the transitive causal closures.
+
+        This method assumes unique causal bridges.
 
         The procedure is:
-
         1. Compact the enabling relations into unique bridges.
         2. Compute transitive causal closures of all measurements.
         3. Group measurements by identical enabling relation (same LHS).
@@ -820,11 +946,9 @@ class CCSGenerator:
             enabling_relations_dict (dict[str, list[list[dict]]]): Mapping from each
                 measurement to its enabling alternatives. Under the unique-bridge
                 assumption, each list must have length 0 or 1.
-            allow_unclean_local_covers (bool): If False, reject and resample local
-                partitions that are internally inconsistent. If True, keep them and
-                split incompatible blocks into singletons when needed.
-            max_partition_tries (int): Max number of attempts to sample a clean local
-                partition for each enabling group.
+            allow_unclean_local_covers (bool): If False, local blocks are constructed so they are
+                clean on the first try. If True, the method keeps the previous relaxed behavior of
+                sampling local covers and tolerating inconsistent blocks.
 
         Returns:
             list[list[str]]: A causally secured cover as a list of contexts.
@@ -894,35 +1018,13 @@ class CCSGenerator:
             lhs_key = canonical_relation(unique_bridge[m])
             groups[lhs_key].append(m)
 
-        # 4) sample a random local cover for each group
-        def block_is_clean(block):
-            """A block is clean if all measurements in it can coexist."""
-            req = dict()
-            for m in block:
-                merged = self._merge_requirements(req, closure_req[m])
-                if merged is None:
-                    return False
-                req = merged
-            return True
-
-        # TODO: handle the cleanliness of the local covers in the generation in some way
+        # 4) sample or construct a local cover for each group
         local_covers = dict()
         for lhs_key, rhs in groups.items():
-            sampled = None
-            # FIXME: remove the max_tries logic and force it to succeed every time in some way
-            for _ in range(max_partition_tries):
-                candidate = self.sample_local_cover(rhs)
-                if allow_unclean_local_covers or all(block_is_clean(block) for block in candidate):
-                    sampled = candidate
-                    break
-
-            if sampled is None:
-                raise ValueError(
-                    "Failed to sample a clean local cover for enabling group "
-                    f"{lhs_key if lhs_key else '∅'} after {max_partition_tries} tries."
-                )
-
-            local_covers[lhs_key] = sampled
+            if allow_unclean_local_covers:
+                local_covers[lhs_key] = self.sample_local_cover(rhs)
+            else:
+                local_covers[lhs_key] = self._build_clean_local_cover(rhs, closure_req)
 
         # 5) convert each local block into a candidate global context
         candidate_contexts = []
@@ -938,20 +1040,6 @@ class CCSGenerator:
                     req = merged
 
                 if not consistent:
-                    if allow_unclean_local_covers:
-                        # fall back to singleton contexts if the block is not clean
-                        for m in block:
-                            singleton_req = closure_req[m]
-                            ctx = set([m]) | set(singleton_req.keys())
-                            candidate_contexts.append(
-                                {
-                                    "meas": frozenset(ctx),
-                                    "req": dict(singleton_req),
-                                    "origin": lhs_key,
-                                }
-                            )
-                        continue
-
                     raise ValueError(
                         "A sampled local block is internally inconsistent. "
                         "Set allow_unclean_local_covers=True to relax this."

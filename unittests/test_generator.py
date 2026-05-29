@@ -8,6 +8,7 @@ from pathlib import Path
 
 import pytest
 
+from quantum_experiment_structures.causal_contextuality_scenario import CausallySecuredScenario
 import quantum_experiment_structures.generator as generator_module
 from quantum_experiment_structures.generator import CCSGenerator
 from quantum_experiment_structures.utils import utils
@@ -204,7 +205,9 @@ def test_generator_cover_generation(default_settings):
         return [[m] for m in rhs]
 
     gen.sample_local_cover = fake_local_cover  # type: ignore
-    cover = gen.generate_causally_secured_cover(measurements, enabling_relations)
+    cover = gen.generate_causally_secured_cover(
+        measurements, enabling_relations, allow_unclean_local_covers=True
+    )
     assert sorted(map(sorted, cover)) == sorted([sorted(["A", "B"]), sorted(["A", "C"])])
 
     bad = deepcopy(enabling_relations)
@@ -381,7 +384,9 @@ def test_generate_causally_secured_cover_simple(default_settings, monkeypatch):
     measurements = ["A", "B"]
     relations = {"A": [], "B": []}
     monkeypatch.setattr(gen, "sample_local_cover", lambda rhs: [list(rhs)])
-    cover = gen.generate_causally_secured_cover(measurements, relations)
+    cover = gen.generate_causally_secured_cover(
+        measurements, relations, allow_unclean_local_covers=True
+    )
     assert cover == [["A", "B"]]
 
 
@@ -584,34 +589,12 @@ def test_generate_causally_secured_cover_rejects_unclean_block_when_resampling_f
     monkeypatch.setattr(gen, "sample_local_cover", lambda rhs: [["A", "B"]])
     monkeypatch.setattr(gen, "_merge_requirements", lambda left, right: None)
 
-    with pytest.raises(ValueError, match="Failed to sample a clean local cover"):
+    with pytest.raises(ValueError, match="A sampled local block is internally inconsistent."):
         gen.generate_causally_secured_cover(
             measurements,
             enabling_relations,
             allow_unclean_local_covers=False,
-            max_partition_tries=1,
         )
-
-
-def test_generate_causally_secured_cover_falls_back_to_singletons_when_unclean_allowed(
-    default_settings, monkeypatch
-):
-    """Split an unclean block into singleton contexts when allowed."""
-    gen = CCSGenerator(**default_settings)
-    measurements = ["A", "B"]
-    enabling_relations = {}
-
-    monkeypatch.setattr(gen, "sample_local_cover", lambda rhs: [["A", "B"]])
-    monkeypatch.setattr(gen, "_merge_requirements", lambda left, right: None)
-
-    cover = gen.generate_causally_secured_cover(
-        measurements,
-        enabling_relations,
-        allow_unclean_local_covers=True,
-        max_partition_tries=1,
-    )
-
-    assert sorted(map(tuple, cover)) == [("A",), ("B",)]
 
 
 def test_generate_causally_secured_cover_adds_missing_measurements_when_allowed(
@@ -628,7 +611,6 @@ def test_generate_causally_secured_cover_adds_missing_measurements_when_allowed(
         measurements,
         enabling_relations,
         allow_unclean_local_covers=True,
-        max_partition_tries=1,
     )
 
     assert sorted(map(tuple, cover)) == [("A",), ("B",)]
@@ -657,26 +639,6 @@ def test_sample_local_cover_uses_generated_cover_for_five_or_more_measurements(
     assert set(m for context in cover for m in context) == set(measurements)
 
 
-def test_generate_causally_secured_cover_raises_when_no_clean_local_cover_can_be_sampled(
-    default_settings, monkeypatch
-):
-    """Raise when every sampled local cover is rejected as unclean."""
-    gen = CCSGenerator(**default_settings)
-    measurements = ["A", "B"]
-    enabling_relations = {}
-
-    monkeypatch.setattr(gen, "sample_local_cover", lambda rhs: [["A", "B"]])
-    monkeypatch.setattr(gen, "_merge_requirements", lambda left, right: None)
-
-    with pytest.raises(ValueError, match="Failed to sample a clean local cover"):
-        gen.generate_causally_secured_cover(
-            measurements,
-            enabling_relations,
-            allow_unclean_local_covers=False,
-            max_partition_tries=1,
-        )
-
-
 def test_generate_causally_secured_cover_raises_on_internally_inconsistent_block(
     default_settings, monkeypatch
 ):
@@ -701,24 +663,238 @@ def test_generate_causally_secured_cover_raises_on_internally_inconsistent_block
             measurements,
             enabling_relations,
             allow_unclean_local_covers=False,
-            max_partition_tries=1,
         )
 
 
-def test_generate_causally_secured_cover_raises_when_final_cover_missing_measurements(
-    default_settings, monkeypatch
-):
-    """Raise when the final cover misses a measurement and relaxation is disabled."""
-    gen = CCSGenerator(**default_settings)
+def _get_default_generator_settings():
+    """Return a standard dictionary of safe default settings for initialization."""
+    return {
+        "n_measurements_range": [2, 3],
+        "n_values_range": [2, 2],
+        "n_scenarios": 1,
+        "seed": 42,
+    }
+
+
+def test_generate_with_causally_secured():
+    """Generate scenarios with causally secured property enabled."""
+    settings = _get_default_generator_settings()
+    gen = CCSGenerator(**settings)
+    gen.causally_secured = True
+    for ccs in gen.generate():
+        causally_secured = CausallySecuredScenario(ccs.data)
+        assert causally_secured.everything()
+
+
+def test_generate_enabling_relations_force_unique_bridges():
+    """Generate enabling relations with forced unique causal bridges."""
+    settings = _get_default_generator_settings()
+    gen = CCSGenerator(**settings)
+    measurements = ["A", "B", "C"]
+    outcomes = {"A": [0, 1], "B": [0, 1], "C": [0, 1]}
+
+    relations = gen.generate_enabling_relations(
+        measurements, outcomes, force_unique_bridges=True, consistent_relations=False
+    )
+    assert isinstance(relations, dict)
+
+
+def test_generate_enabling_relations_consistent_relations():
+    """Generate enabling relations with consistent set of events required."""
+    settings = _get_default_generator_settings()
+    gen = CCSGenerator(**settings)
+    measurements = ["A", "B", "C"]
+    outcomes = {"A": [0, 1], "B": [0, 1], "C": [0, 1]}
+
+    relations = gen.generate_enabling_relations(
+        measurements, outcomes, force_unique_bridges=False, consistent_relations=True
+    )
+    assert isinstance(relations, dict)
+
+
+def test_sample_consistent_relation_handles_incompatible_requirements(monkeypatch):
+    """Skip measurements during relation sampling if their requirements are incompatible."""
+    settings = _get_default_generator_settings()
+    gen = CCSGenerator(**settings)
+    measurements = ["A", "B", "C"]
+    outcomes = {"A": [0, 1], "B": [0, 1], "C": [0, 1]}
+
+    monkeypatch.setattr(gen, "_merge_requirements", lambda left, right: None)
+
+    relations = gen.generate_enabling_relations(
+        measurements, outcomes, force_unique_bridges=True, consistent_relations=False
+    )
+    assert isinstance(relations, dict)
+
+
+def test_sample_consistent_relation_fails_on_event_merge(monkeypatch):
+    """Skip measurements during relation sampling if the event choice is inconsistent."""
+    settings = _get_default_generator_settings()
+    gen = CCSGenerator(**settings)
+    measurements = ["A", "B", "C"]
+    outcomes = {"A": [0, 1], "B": [0, 1], "C": [0, 1]}
+
+    call_count = {"count": 0}
+
+    def mock_merge(left, right):
+        call_count["count"] += 1
+        if call_count["count"] % 2 == 1:
+            return {}
+        return None
+
+    monkeypatch.setattr(gen, "_merge_requirements", mock_merge)
+    relations = gen.generate_enabling_relations(
+        measurements, outcomes, force_unique_bridges=True, consistent_relations=False
+    )
+    assert isinstance(relations, dict)
+
+
+def test_generate_enabling_relations_duplicate_consistent_relation():
+    """Skip duplicate enabling relations when sampling consistent relations."""
+    settings = _get_default_generator_settings()
+    settings["n_alternatives_mean"] = 10
+    settings["n_alternatives_range"] = [10, 10]
+    gen = CCSGenerator(**settings)
+    measurements = ["A", "B", "C"]
+    outcomes = {"A": [0, 1], "B": [0, 1], "C": [0, 1]}
+
+    relations = gen.generate_enabling_relations(
+        measurements, outcomes, force_unique_bridges=False, consistent_relations=True
+    )
+    assert isinstance(relations, dict)
+
+
+def test_block_requirement_valid():
+    """Return the merged dictionary of requirements for a valid block of measurements."""
+    settings = _get_default_generator_settings()
+    gen = CCSGenerator(**settings)
+    block = ["A", "B"]
+    closure_req = {"A": {"X": 0}, "B": {"Y": 1}}
+    req = gen._block_requirement(block, closure_req)
+    assert req == {"X": 0, "Y": 1}
+
+
+def test_block_requirement_inconsistent():
+    """Return None when a block contains mutually inconsistent requirements."""
+    settings = _get_default_generator_settings()
+    gen = CCSGenerator(**settings)
+    block = ["A", "B"]
+    closure_req = {"A": {"X": 0}, "B": {"X": 1}}
+    req = gen._block_requirement(block, closure_req)
+    assert req is None
+
+
+def test_compatible_block_indices():
+    """Find all block indices that are compatible with the candidate requirements."""
+    settings = _get_default_generator_settings()
+    gen = CCSGenerator(**settings)
+    candidate = "A"
+    closure_req = {"A": {"X": 0}}
+    block_reqs = [{"X": 0}, {"X": 1}]
+    indices = gen._compatible_block_indices(candidate, block_reqs, closure_req)
+    assert indices == [0]
+
+
+def test_build_clean_local_cover_empty():
+    """Return an empty list when building a clean local cover for zero measurements."""
+    settings = _get_default_generator_settings()
+    gen = CCSGenerator(**settings)
+    assert gen._build_clean_local_cover([], {}) == []
+
+
+def test_build_clean_local_cover_valid():
+    """Build a valid clean local cover partitioning the given measurements."""
+    settings = _get_default_generator_settings()
+    gen = CCSGenerator(**settings)
     measurements = ["A", "B"]
-    enabling_relations = {}
+    closure_req = {"A": {"X": 0}, "B": {"X": 0}}
+    cover = gen._build_clean_local_cover(measurements, closure_req)
+    assert len(cover) > 0
 
-    monkeypatch.setattr(gen, "sample_local_cover", lambda rhs: [["A"]])
 
-    with pytest.raises(ValueError, match="does not cover all measurements"):
+def test_generate_causally_secured_cover_clean_branch():
+    """Build a clean local cover within the causally secured cover generation process."""
+    settings = _get_default_generator_settings()
+    gen = CCSGenerator(**settings)
+    measurements = ["A", "B"]
+    enabling_relations_dict = {"A": [], "B": []}
+    cover = gen.generate_causally_secured_cover(
+        measurements, enabling_relations_dict, allow_unclean_local_covers=False
+    )
+    assert isinstance(cover, list)
+
+
+def test_generate_loop_with_causally_secured():
+    """Execute the causally secured cover generation branch within the main loop."""
+    settings = _get_default_generator_settings()
+    settings["causally_secured"] = True
+    gen = CCSGenerator(**settings)
+    for ccs in gen.generate():
+        causally_secured = CausallySecuredScenario(ccs.data)
+        assert causally_secured.everything()
+
+
+def test_generate_enabling_relations_consistent_relation_none(monkeypatch):
+    """Hit the continue branch when the sampled consistent relation is None."""
+    settings = _get_default_generator_settings()
+    settings["n_alternatives_mean"] = 1
+    settings["n_alternatives_range"] = [1, 1]
+    gen = CCSGenerator(**settings)
+
+    monkeypatch.setattr(gen.rng, "random", lambda: 0.0)
+    monkeypatch.setattr(gen, "_merge_requirements", lambda left, right: None)
+
+    measurements = ["A", "B"]
+    outcomes = {"A": [0, 1], "B": [0, 1]}
+
+    res = gen.generate_enabling_relations(
+        measurements, outcomes, force_unique_bridges=False, consistent_relations=True
+    )
+    assert isinstance(res, dict)
+
+
+def test_generate_enabling_relations_consistent_relation_duplicate(monkeypatch):
+    """Hit the continue branch when the sampled consistent relation is a duplicate."""
+    settings = _get_default_generator_settings()
+    gen = CCSGenerator(**settings)
+    settings["n_alternatives_mean"] = 2
+    settings["n_alternatives_range"] = [2, 2]
+
+    monkeypatch.setattr(gen.rng, "random", lambda: 0.0)
+    monkeypatch.setattr(gen.rng, "choice", lambda x: list(x)[0])
+
+    measurements = ["A", "B"]
+    outcomes = {"A": [0, 1], "B": [0, 1]}
+
+    res = gen.generate_enabling_relations(
+        measurements, outcomes, force_unique_bridges=False, consistent_relations=True
+    )
+    assert isinstance(res, dict)
+
+
+def test_build_clean_local_cover_hits_else_branch(monkeypatch):
+    """Hit the else branch by choosing an existing compatible block index."""
+    settings = _get_default_generator_settings()
+    gen = CCSGenerator(**settings)
+    measurements = ["A", "B"]
+    closure_req = {"A": {"X": 0}, "B": {"X": 0}}
+
+    monkeypatch.setattr(gen.rng, "choice", lambda options: options[0])
+
+    cover = gen._build_clean_local_cover(measurements, closure_req)
+    assert cover == [["A", "B"]]
+
+
+def test_generate_causally_secured_cover_raises_value_error_when_missing(monkeypatch):
+    """Raise a ValueError when the generated cover does not include all measurements."""
+    settings = _get_default_generator_settings()
+    gen = CCSGenerator(**settings)
+    measurements = ["A", "B"]
+    enabling_relations_dict = {"A": [], "B": []}
+
+    monkeypatch.setattr(gen, "_build_clean_local_cover", lambda measurements, closure_req: [])
+
+    with pytest.raises(ValueError, match="The generated cover does not cover all measurements"):
         gen.generate_causally_secured_cover(
-            measurements,
-            enabling_relations,
-            allow_unclean_local_covers=False,
-            max_partition_tries=1,
+            measurements, enabling_relations_dict, allow_unclean_local_covers=False
         )

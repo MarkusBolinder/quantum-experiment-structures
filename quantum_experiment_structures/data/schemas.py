@@ -109,6 +109,7 @@ CCS_GENERATOR_SETTINGS_SCHEMA = {
         "output_dir": {"oneOf": [{"type": "string"}, {"type": "null"}], "default": None},
         "batch_size": {"type": "integer", "default": 1, "minimum": 1},
         "causally_secured": {"type": "boolean", "default": False},
+        "consistent_relations": {"type": "boolean", "default": False},
         "n_scenarios": {"type": "integer", "default": 1, "minimum": 1},
         "seed": {"oneOf": [{"type": "integer"}, {"type": "null"}], "default": None},
     },
@@ -288,4 +289,3 @@ SPACETIME_GAME_SCHEMA = {
     },
     "additionalProperties": False,
 }
-
