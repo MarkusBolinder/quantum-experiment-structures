@@ -155,6 +155,11 @@ def main():
         "This means that a random order is chosen.",
     )
     parser.add_argument(
+        "--causally-secured",
+        action="store_true",
+        help="Force the generated covers to be causally secured.",
+    )
+    parser.add_argument(
         "--output-dir",
         default=_default_value("output_dir"),
         help="Directory to write generated scenarios.",
