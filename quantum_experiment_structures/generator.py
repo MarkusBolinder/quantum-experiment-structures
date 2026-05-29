@@ -332,7 +332,12 @@ class CCSGenerator:
                 }
 
                 # 5) instantiate CCS and validate
-                ccs = qes.CausalContextualityScenario(scenario)
+                cls = (
+                    qes.CausallySecuredScenario
+                    if self.causally_secured
+                    else qes.CausalContextualityScenario
+                )
+                ccs = cls(scenario)
                 if ccs.everything():
                     # yield the validated scenario immediately
                     yield ccs
