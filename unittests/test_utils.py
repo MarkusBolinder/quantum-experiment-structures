@@ -1,6 +1,8 @@
 """Unit tests for the utils.utils module."""
 
+import os
 import sys
+import time
 
 import pytest
 import json
@@ -8,6 +10,7 @@ import numpy as np
 
 from quantum_experiment_structures.data.integer_sequences import DEDEKIND_NUMBERS
 from quantum_experiment_structures.utils.utils import (
+    cancel_call,
     json_file_size,
     json_size_bytes,
     get_json_obj_size,
@@ -364,3 +367,32 @@ def test_get_json_obj_size_supports_dict_tuple_and_scalars(monkeypatch):
     obj = {"x": (1, "ab", False, None, 3.5)}
     expected = 10 + 5 + (30 + 1 + 6 + 1 + 1 + 1)
     assert get_json_obj_size(obj) == expected
+
+
+# signal.setitimer is only avialable on Unix
+IS_NOT_UNIX = os.name != "posix"
+
+
+@pytest.mark.skipif(IS_NOT_UNIX, reason="Requires Unix signal and itimer support.")
+def test_cancel_call_completes_within_timeout():
+    """Ensure the decorated function returns normally if it finishes before the timeout."""
+
+    @cancel_call(seconds=0.1)
+    def fast_function(value):
+        time.sleep(0.01)
+        return value
+
+    assert fast_function("success") == "success"
+
+
+@pytest.mark.skipif(IS_NOT_UNIX, reason="Requires Unix signal and itimer support.")
+def test_cancel_call_times_out():
+    """Raise a TimeoutError if the decorated function takes longer than the timeout."""
+
+    @cancel_call(seconds=0.01)
+    def slow_function():
+        time.sleep(0.05)
+        return "completed"
+
+    with pytest.raises(TimeoutError, match="Timeout: 0.01 sec reached"):
+        slow_function()

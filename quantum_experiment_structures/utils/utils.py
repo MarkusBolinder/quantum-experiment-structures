@@ -8,11 +8,39 @@ import json
 import math
 from pathlib import Path
 import re
+import signal
 import sys
 
 import jsonschema
 import numpy as np
 from quantum_experiment_structures.data.integer_sequences import DEDEKIND_NUMBERS
+
+
+# https://stackoverflow.com/questions/25027122/break-the-function-after-certain-time
+# https://stackoverflow.com/questions/644073/signal-alarm-replacement-in-windows-python
+def cancel_call(seconds=1.0):
+    # custom signal handler
+    def timeout_handler(signum, frame):
+        raise TimeoutError()
+
+    def function(function):
+        def wrapper(*args, **kwargs):
+            # NOTE: these signal methods only work on Unix systems
+            try:
+                signal.signal(signal.SIGALRM, timeout_handler)
+                signal.setitimer(signal.ITIMER_REAL, seconds)
+                result = function(*args, **kwargs)
+                # clear timer
+                signal.setitimer(signal.ITIMER_REAL, 0)
+                return result
+            except TimeoutError as e:
+                raise TimeoutError(
+                    f"Timeout: {seconds} sec reached. {function.__name__, args, kwargs}"
+                ) from e
+
+        return wrapper
+
+    return function
 
 
 def json_file_size(path):
