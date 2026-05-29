@@ -2,7 +2,6 @@
 
 from collections import Counter, defaultdict, deque
 import inspect
-import itertools
 import json
 from pathlib import Path
 
@@ -61,8 +60,6 @@ class SpacetimeGame:
 
     def __repr__(self):
         """Return a string representation of the spacetime game."""
-        if "h" in self.data:
-            return "\n".join(f"{k:6s}: {v}" for k, v in self.data["h"].items())
         return str(self.data)
 
     def validate(self):
@@ -279,103 +276,6 @@ class SpacetimeGame:
                 raise ValueError(
                     f"Utility for history '{history['z']}' is missing players: {missing}."
                 )
-        return True
-
-    def check_strategies_consistency(self):
-        """Verify strategy validity, player matching, completeness, and uniqueness.
-
-        Checks:
-        1. The player associated with each strategy group is known.
-        2. Every assignment in a strategy uses a valid information set for that player.
-        3. Every information set played by the player appears exactly once in each strategy.
-        4. No duplicate strategies (as sets of assignments) exist for a player.
-
-        Raises:
-            ValueError: If a strategy/player mismatch, missing information set,
-                invalid action, or duplicate strategy is found.
-        """
-        player_to_isets = {
-            player: {iset_id for iset_id, iset in self.info_sets.items() if iset["p"] == player}
-            for player in self.players
-        }
-
-        for strategy_group in self.data.get("s", []):
-            player = strategy_group["p"]
-            if player not in self.players:
-                raise ValueError(f"Strategy lists an unknown player '{player}'.")
-
-            expected_isets = player_to_isets[player]
-            seen_strategies = set()
-
-            for strategy in strategy_group["s"]:
-                info_set_counter = Counter()
-                # check player consistency with info set
-                assigned_isets = set()
-
-                for assignment in strategy:
-                    iset_id, action = assignment.values()
-                    info_set_counter.update([iset_id])
-                    assigned_isets.add(iset_id)
-
-                    iset = self.info_sets.get(iset_id)
-                    if iset is None:
-                        raise ValueError(
-                            f"Strategy for '{player}' references unknown info set '{iset_id}'."
-                        )
-
-                    if iset["p"] != player:
-                        raise ValueError(
-                            f"Strategy for player '{player}' contains info set '{iset_id}' "
-                            f"belonging to player '{iset['p']}'."
-                        )
-
-                    if action not in iset["a"]:
-                        raise ValueError(
-                            f"Action '{action}' not playable in information set '{iset_id}'."
-                        )
-
-                missing_isets = expected_isets - assigned_isets
-                extra_isets = assigned_isets - expected_isets
-                if missing_isets or extra_isets:
-                    raise ValueError(
-                        f"Strategy for player '{player}' does not assign exactly one action "
-                        f"to every information set. Missing: {sorted(missing_isets)}; "
-                        f"unexpected: {sorted(extra_isets)}."
-                    )
-
-                # make sure every information set is only listed once in the strategy
-                for k, v in info_set_counter.items():
-                    if v > 1:
-                        raise ValueError(
-                            f"Information set '{k}' assigned more than one action in strategy "
-                            f"{strategy}. {v} assignments found."
-                        )
-
-                # check for duplicate strategies, e.g. [[A,B],[B,A]]
-                strategy_set = frozenset(tuple(a.values()) for a in strategy)
-                if strategy_set in seen_strategies:
-                    raise ValueError(f"Duplicate strategy found for player '{player}': {strategy}")
-                seen_strategies.add(strategy_set)
-
-        return True
-
-    def check_number_of_strategies(self):
-        """Verify that the amount of strategies for each player is correct.
-
-        Returns:
-            bool: False if there are more than one strategy groups associated with any one player or
-                the union of the players with stratgies is not the set of all players.
-        """
-        if "s" not in self.data:
-            return True
-        strategies_per_player = Counter(strategy_group["p"] for strategy_group in self.data["s"])
-        players_with_strategies = set(strategies_per_player.keys())
-        # only one strategy group per player
-        if any(n > 1 for n in strategies_per_player.values()):
-            return False
-        # all players should have strategies
-        if players_with_strategies != self.players:
-            return False
         return True
 
     def check_reduced_strategies_consistency(self):
@@ -601,45 +501,6 @@ class SpacetimeGame:
         # start recursion from an empty history
         expand_history(dict())
 
-    def add_strategies(self):
-        """Add all missing full (non-reduced) strategies for every player.
-
-        Populates the data with predefined actions for each player in each information set,
-        corresponding to all their possible strategies. This method does not create the reduced
-        strategies, but instead assigns actions to all information sets -- even though they may not
-        be played/reached in the spacetime game given the previous actions taken.
-        """
-        # TODO: check that this method produces correct results
-        if "s" not in self.data:
-            self.data["s"] = []
-
-        # map players to all information sets they are in
-        player_isets = {
-            p: [i for i, data in self.info_sets.items() if data["p"] == p] for p in self.players
-        }
-
-        for player, isets in player_isets.items():
-            # find first strategy that is associated with 'player'
-            group = next(
-                (
-                    strategy_group
-                    for strategy_group in self.data["s"]
-                    if strategy_group["p"] == player
-                ),
-                None,
-            )
-            if not group:
-                group = {"p": player, "s": []}
-                self.data["s"].append(group)
-
-            # TODO: can the check for existing strategies be more memory efficient
-            existing = set(frozenset(tuple(a.values()) for a in s) for s in group["s"])
-            action_lists = [self.info_sets[i]["a"] for i in isets]
-            for combo in itertools.product(*action_lists):
-                strategy = [{"i": i, "a": a} for i, a in zip(isets, combo)]
-                if frozenset(tuple(a.values()) for a in strategy) not in existing:
-                    group["s"].append(strategy)
-
     def add_reduced_strategies(self):
         """Add all reduced strategies for every player to the game data.
 
@@ -700,99 +561,6 @@ class SpacetimeGame:
 
             expand(dict())
 
-    def add_human_readable(self):
-        """Add a human readable representation of the spacetime game to the data.
-
-        This method constructs strings for the components of the spacetime game
-        tuple (N, R, P, A, rho, chi, sigma, I, Z, u) and stores them in self.data["h"].
-
-        There are no checks to ensure that the human readable format correctly describes
-        the game. However, the schema enforces (light) constraints on the format of the
-        human readable part.
-        """
-        # 1. P and A: sets of players and actions
-        ps_representation = "{" + ", ".join(sorted(self.players)) + "}"
-        as_representation = "{" + ", ".join(sorted(self.actions)) + "}"
-
-        # 2. N: set of decision nodes
-        all_node_names = sorted(self.nodes.keys())
-        ns_representation = "{" + ", ".join(all_node_names) + "}"
-
-        # 3. R and σ: edges and edge action labeling
-        # σ(N,M) represents the action label on the directed edge from N to M
-        sigma_labels = []
-        for node_name in all_node_names:
-            for child in self.adj[node_name]:
-                sigma_labels.append(f"σ({node_name}, {child['c']}) = {child['a']}")
-        es_representation = ", ".join(sigma_labels) if sigma_labels else "∅"
-
-        # 4. I, ρ, χ: information sets, player labeling, and action labeling
-        # each information set i in I must be compatible with ρ and χ (same player and action set)
-        is_list = []
-        for i_id in sorted(self.info_sets.keys()):
-            iset = self.info_sets[i_id]
-            node_set = "{" + ", ".join(sorted(n["n"] for n in iset["ns"])) + "}"
-            player = iset["p"]
-            action_set = "{" + ", ".join(sorted(iset["a"])) + "}"
-            is_list.append(f"{i_id} = {node_set} [ρ:{player}, χ:{action_set}]")
-        is_representation = ", ".join(is_list)
-
-        # 5. Z: complete histories, represented as sets of (information set, action) assignments
-        z_list = []
-        for history in self.data.get("z", []):
-            assignments = "{" + ", ".join(f"({a['i']}, {a['a']})" for a in history["h"]) + "}"
-            z_list.append(f"{history['z']} = {assignments}")
-        z_representation = ", ".join(z_list) if z_list else "∅"
-
-        # 6. u: utility functions -- mapping outcomes to payoffs for each player
-        u_list = []
-        for history in self.data.get("z", []):
-            z_id = history["z"]
-            for payoff in history.get("u", []):
-                u_list.append(f"u_{payoff['p']}({z_id}) = {payoff['v']}")
-        u_representation = ", ".join(u_list) if u_list else "∅"
-
-        # 7. s: strategies, represented as sets of histories for each player
-        s_list = []
-        for strategy_group in self.data.get("s", []):
-            player = strategy_group["p"]
-            strategies = []
-            for strategy in strategy_group["s"]:
-                assignments = "{" + ", ".join(f"({a['i']}, {a['a']})" for a in strategy) + "}"
-                strategies.append(assignments)
-            s_list.append(f"S_{player} = {{{', '.join(strategies)}}}")
-        s_representation = ", ".join(s_list) if s_list else "∅"
-
-        # 8. rs: reduced strategies, actions may be null/None/⟂ (not reachable in that strategy)
-        rs_list = []
-        for reduced_strategy_group in self.data.get("rs", []):
-            player = reduced_strategy_group["p"]
-            reduced_strategies = []
-            for reduced_strategy in reduced_strategy_group["s"]:
-                assignments = (
-                    "{"
-                    + ", ".join(
-                        f"({a['i']}, {a['a'] if a['a'] is not None else '⟂'})"
-                        for a in reduced_strategy
-                    )
-                    + "}"
-                )
-                reduced_strategies.append(assignments)
-            rs_list.append(f"RS_{player} = {{{', '.join(reduced_strategies)}}}")
-        rs_representation = ", ".join(rs_list) if rs_list else "∅"
-
-        self.data["h"] = {
-            "ns": ns_representation,
-            "es": es_representation,
-            "ps": ps_representation,
-            "as": as_representation,
-            "is": is_representation,
-            "z": z_representation,
-            "u": u_representation,
-            "s": s_representation,
-            "rs": rs_representation,
-        }
-
     def all_checks(self):
         """Perform all checks."""
         for name, member in inspect.getmembers(self):
@@ -803,24 +571,14 @@ class SpacetimeGame:
         return True
 
     def all_adds(self):
-        """Add everything that can be added based on the base CCS data.
-
-        For correctness, certain methods need to be run before others, in particular, we need to add
-        strategies and histories before adding human readable, and we need to add histories before
-        we can add the field of which information sets are played in the history.
-        """
+        """Add everything that can be added based on the base spacetime game data."""
         methods_to_add = {
             name: member
             for name, member in inspect.getmembers(self)
             if inspect.ismethod(member) and name.startswith("add")
         }
-        del methods_to_add["add_histories"]
-        del methods_to_add["add_human_readable"]
-        self.add_histories()
         for method in methods_to_add.values():
             method()
-        # calling this last ensures all information is available for the method
-        self.add_human_readable()
 
     def to_json(self, filename, indent=None):
         """Flush data to a JSON file."""

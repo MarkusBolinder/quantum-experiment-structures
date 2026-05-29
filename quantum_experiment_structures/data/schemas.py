@@ -231,25 +231,6 @@ SPACETIME_GAME_SCHEMA = {
             "uniqueItems": True,
             "minItems": 1,
         },
-        "s": {  # strategies
-            "type": "array",
-            "items": {
-                "type": "object",
-                "required": ["p", "s"],
-                "properties": {
-                    "p": {"$ref": "#/$defs/player"},
-                    "s": {  # all strategies for this player
-                        "type": "array",
-                        "items": {"$ref": "#/$defs/history_or_strategy"},
-                        "uniqueItems": True,
-                        "minItems": 1,
-                    },
-                    "additionalProperties": False,
-                },
-            },
-            "uniqueItems": True,
-            "minItems": 1,
-        },
         "rs": {
             "type": "array",
             "items": {
@@ -270,22 +251,6 @@ SPACETIME_GAME_SCHEMA = {
             "minItems": 1,
         },
         "n": {"type": "array", "items": {"type": "string"}},
-        "h": {
-            "type": "object",
-            "required": ["ns", "es", "ps", "as", "is", "z", "u", "s", "rs"],
-            "properties": {
-                "ns": {"type": "string"},  # nodes
-                "es": {"type": "string"},  # edges
-                "ps": {"type": "string"},  # players
-                "as": {"type": "string"},  # actions
-                "is": {"type": "string"},  # information sets
-                "z": {"type": "string"},  # histories
-                "u": {"type": "string"},  # utility
-                "s": {"type": "string"},  # strategies
-                "rs": {"type": "string"},  # reduced strategies
-            },
-            "additionalProperties": False,
-        },
     },
     "additionalProperties": False,
 }

@@ -124,25 +124,6 @@
             "uniqueItems": true,
             "minItems": 1
         },
-        "s": {
-            "type": "array",
-            "items": {
-                "type": "object",
-                "required": ["p", "s"],
-                "properties": {
-                    "p": { "$ref": "#/$defs/player" },
-                    "s": {
-                        "type": "array",
-                        "items": { "$ref": "#/$defs/history_or_strategy" },
-                        "uniqueItems": true,
-                        "minItems": 1
-                    },
-                    "additionalProperties": false
-                }
-            },
-            "uniqueItems": true,
-            "minItems": 1
-        },
         "rs": {
             "type": "array",
             "items": {
@@ -165,22 +146,6 @@
         "n": {
             "type": "array",
             "items": { "type": "string" }
-        },
-        "h": {
-            "type": "object",
-            "required": [ "ns", "es", "ps", "as", "is", "z", "u", "s", "rs" ],
-            "properties": {
-                "ns": { "type": "string" },
-                "es": { "type": "string" },
-                "ps": { "type": "string" },
-                "as": { "type": "string" },
-                "is": { "type": "string" },
-                "z": { "type": "string" },
-                "u": { "type": "string" },
-                "s": { "type": "string" },
-                "rs": { "type": "string" }
-            },
-            "additionalProperties": false
         }
     },
     "additionalProperties": false

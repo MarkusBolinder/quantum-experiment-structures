@@ -658,39 +658,13 @@ def test_game_strategies_and_adders(valid_game_data):
     game.add_played_information_sets()
     assert game.data["z"][0]["s"] == ["I1", "I2"]
 
-    game.add_strategies()
-    assert game.check_number_of_strategies() is True
-    assert game.check_strategies_consistency() is True
-
     game.data.pop("rs", None)
     game.add_reduced_strategies()
     assert game.check_reduced_strategies_consistency() is True
 
-    game.add_human_readable()
-    assert set(game.data["h"]) == {"ns", "es", "ps", "as", "is", "z", "u", "s", "rs"}
-    assert "ns" in repr(game)
-
 
 def test_game_strategy_failures(valid_game_data):
-    """Reject invalid strategies and reduced strategies."""
-    unknown_player = deepcopy(valid_game_data)
-    unknown_player["s"] = [{"p": "Charlie", "s": []}]
-    with pytest.raises(ValueError, match="unknown player"):
-        SpacetimeGame(unknown_player).check_strategies_consistency()
-
-    foreign_iset = deepcopy(valid_game_data)
-    foreign_iset["s"] = [{"p": "Alice", "s": [[{"i": "I2", "a": "play"}]]}]
-    with pytest.raises(ValueError, match="belonging to player"):
-        SpacetimeGame(foreign_iset).check_strategies_consistency()
-
-    duplicate_strategy = deepcopy(valid_game_data)
-    duplicate_strategy["s"] = [
-        {"p": "Alice", "s": [[{"i": "I1", "a": "play"}], [{"i": "I1", "a": "play"}]]},
-        {"p": "Bob", "s": [[{"i": "I2", "a": "pass"}]]},
-    ]
-    with pytest.raises(ValueError, match="Duplicate strategy"):
-        SpacetimeGame(duplicate_strategy).check_strategies_consistency()
-
+    """Reject invalid reduced strategies."""
     bad_reduced = deepcopy(valid_game_data)
     bad_reduced["rs"] = [{"p": "Alice", "s": [[{"i": "I1", "a": None}]]}]
     with pytest.raises(ValueError, match="reachable but assigned None"):
@@ -848,85 +822,6 @@ def test_add_played_information_sets(two_history_history_data):
     game = SpacetimeGame(data)
     game.add_played_information_sets()
     assert game.data["z"][0]["s"] == ["IB", "IA"]
-
-
-def test_add_strategies_generates_full_cartesian_product(strategy_game_data):
-    """Generate all full strategies for a player with two information sets."""
-
-    game = SpacetimeGame(deepcopy(strategy_game_data))
-    game.add_strategies()
-
-    alice_group = _group_for_player(game.data["s"], "Alice")
-    bob_group = _group_for_player(game.data["s"], "Bob")
-    charlie_group = _group_for_player(game.data["s"], "Charlie")
-
-    assert len(alice_group["s"]) == 4
-    assert len(bob_group["s"]) == 1
-    assert len(charlie_group["s"]) == 1
-
-    alice_strategies = {_strategy_set(strategy) for strategy in alice_group["s"]}
-    assert alice_strategies == {
-        frozenset({("IA1", "x"), ("IA2", "x")}),
-        frozenset({("IA1", "x"), ("IA2", "y")}),
-        frozenset({("IA1", "y"), ("IA2", "x")}),
-        frozenset({("IA1", "y"), ("IA2", "y")}),
-    }
-    assert game.check_number_of_strategies() is True
-    assert game.check_strategies_consistency() is True
-
-
-@pytest.mark.parametrize(
-    ("strategy_groups", "match"),
-    [
-        ([{"p": "John Doe", "s": []}], "unknown player"),
-        (
-            [
-                {
-                    "p": "Alice",
-                    "s": [[{"i": "IA1", "a": "x"}, {"i": "IA2", "a": "x"}, {"i": "IB1", "a": "z"}]],
-                }
-            ],
-            "belonging to player",
-        ),
-        (
-            [
-                {
-                    "p": "Alice",
-                    "s": [
-                        [
-                            {"i": "IA1", "a": "x"},
-                            {"i": "IA2", "a": "x"},
-                        ],
-                        [
-                            {"i": "IA1", "a": "x"},
-                            {"i": "IA2", "a": "x"},
-                        ],
-                    ],
-                }
-            ],
-            "Duplicate strategy",
-        ),
-    ],
-)
-def test_full_strategy_consistency_failures(strategy_game_data, strategy_groups, match):
-    """Reject malformed full-strategy groups."""
-
-    data = deepcopy(strategy_game_data)
-    data["s"] = strategy_groups
-    with pytest.raises(ValueError, match=match):
-        SpacetimeGame(data).check_strategies_consistency()
-
-
-def test_number_of_strategies_failure(strategy_game_data):
-    """Reject repeated or missing strategy groups."""
-
-    repeated = deepcopy(strategy_game_data)
-    repeated["s"] = [{"p": "Alice", "s": []}, {"p": "Alice", "s": []}]
-    assert SpacetimeGame(repeated).check_number_of_strategies() is False
-
-    missing = deepcopy(strategy_game_data)
-    missing["s"] = [{"p": "Alice", "s": []}, {"p": "Bob", "s": []}]
-    assert SpacetimeGame(missing).check_number_of_strategies() is False
 
 
 def test_add_histories_generates_expected_complete_histories(valid_alternating_game_data):
@@ -1170,9 +1065,8 @@ def test_alternating_all_adds_and_all_checks(valid_alternating_game_data):
     game.all_adds()
 
     assert "z" in game.data
-    assert "s" in game.data
     assert "rs" in game.data
-    assert "h" in game.data
+    assert game.validate()
     assert game.all_checks() is True
 
 
@@ -1315,37 +1209,6 @@ def test_convert_to_extensive_game_combined_structure(combined_game_data):
     )
 
 
-def test_strategies_must_cover_all_player_information_sets(valid_game_data):
-    """Reject incomplete strategies and accept complete ones."""
-    complete = deepcopy(valid_game_data)
-    complete["s"] = [
-        {
-            "p": "Alice",
-            "s": [[{"i": "I1", "a": "play"}]],
-        },
-        {
-            "p": "Bob",
-            "s": [[{"i": "I2", "a": "pass"}]],
-        },
-    ]
-    assert SpacetimeGame(complete).check_strategies_consistency() is True
-
-    incomplete = deepcopy(valid_game_data)
-    incomplete["s"] = [
-        {
-            "p": "Alice",
-            "s": [[]],  # missing the action for I1.
-        },
-        {
-            "p": "Bob",
-            "s": [[{"i": "I2", "a": "pass"}]],
-        },
-    ]
-
-    with pytest.raises(ValueError, match="does not assign exactly one action"):
-        SpacetimeGame(incomplete).check_strategies_consistency()
-
-
 def test_init_rejects_non_string_actions(valid_game_data):
     """Reject non-string actions during initialization."""
     data = deepcopy(valid_game_data)
@@ -1353,32 +1216,6 @@ def test_init_rejects_non_string_actions(valid_game_data):
 
     with pytest.raises(NotImplementedError):
         SpacetimeGame(data)
-
-
-def test_check_strategies_consistency_rejects_invalid_assignments(valid_game_data):
-    """Reject unknown info sets, foreign info sets, invalid actions, and duplicates."""
-    unknown_iset = deepcopy(valid_game_data)
-    unknown_iset["s"] = [{"p": "Alice", "s": [[{"i": "I99", "a": "play"}]]}]
-    with pytest.raises(ValueError, match="references unknown info set"):
-        SpacetimeGame(unknown_iset).check_strategies_consistency()
-
-    foreign_iset = deepcopy(valid_game_data)
-    foreign_iset["s"] = [{"p": "Alice", "s": [[{"i": "I2", "a": "play"}]]}]
-    with pytest.raises(ValueError, match="belonging to player"):
-        SpacetimeGame(foreign_iset).check_strategies_consistency()
-
-    bad_action = deepcopy(valid_game_data)
-    bad_action["s"] = [{"p": "Alice", "s": [[{"i": "I1", "a": "invalid"}]]}]
-    with pytest.raises(ValueError, match="not playable in information set"):
-        SpacetimeGame(bad_action).check_strategies_consistency()
-
-    duplicate_assignment = deepcopy(valid_game_data)
-    duplicate_assignment["s"] = [
-        {"p": "Alice", "s": [[{"i": "I1", "a": "play"}, {"i": "I1", "a": "pass"}]]},
-        {"p": "Bob", "s": [[{"i": "I2", "a": "pass"}]]},
-    ]
-    with pytest.raises(ValueError, match="assigned more than one action"):
-        SpacetimeGame(duplicate_assignment).check_strategies_consistency()
 
 
 def test_get_activated_information_sets_covers_root_case(valid_game_data):
