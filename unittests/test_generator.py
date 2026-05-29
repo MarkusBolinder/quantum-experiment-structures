@@ -429,7 +429,7 @@ def test_ccs_generator_yields_validated_scenarios(default_settings, monkeypatch)
     monkeypatch.setattr(
         gen,
         "generate_enabling_relations",
-        lambda measurements, outcomes: {"A": [], "B": []},
+        lambda measurements, outcomes, consistent_relations: {"A": [], "B": []},
     )
     monkeypatch.setattr(gen, "sample_contexts", lambda measurements: [["A", "B"]])
 
