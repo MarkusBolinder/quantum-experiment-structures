@@ -160,6 +160,11 @@ def main():
         help="Force the generated covers to be causally secured.",
     )
     parser.add_argument(
+        "--consistent-relations",
+        action="store_true",
+        help="Force the generated enabling relations to all contain consistent sets of events.",
+    )
+    parser.add_argument(
         "--output-dir",
         default=_default_value("output_dir"),
         help="Directory to write generated scenarios.",
