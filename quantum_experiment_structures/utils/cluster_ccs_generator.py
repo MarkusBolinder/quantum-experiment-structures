@@ -15,7 +15,7 @@ from quantum_experiment_structures.data.schemas import CCS_GENERATOR_SETTINGS_SC
 from quantum_experiment_structures.utils import utils
 
 
-def run_generation(n_scenarios, settings, output_dir=None, partitions=None):
+def run_generation(n_scenarios=None, settings=dict(), output_dir=None, partitions=None, spark=None):
     """Run distributed generation using Spark.
 
     Args:
@@ -23,12 +23,14 @@ def run_generation(n_scenarios, settings, output_dir=None, partitions=None):
         settings: Input object adhering to CCS_GENERATOR_SETTINGS_SCHEMA.
         output_dir: Output directory (Spark will create partition files).
         partitions: Number of Spark partitions.
+        spark: a SparkSession. If not given, one will be created.
 
     Returns:
         Output directory path.
     """
 
-    spark = SparkSession.builder.appName("ccs-generator").getOrCreate()
+    if not spark:
+        spark = SparkSession.builder.appName("ccs-generator").getOrCreate()
 
     sc = spark.sparkContext
 
@@ -42,11 +44,16 @@ def run_generation(n_scenarios, settings, output_dir=None, partitions=None):
     if output_dir is None:
         output_dir = f"ccs_output_{uuid.uuid4().hex}"
 
+    seed = settings.pop("seed", None)
+    val = settings.pop("n_scenarios")
+    # use settings value if no specific was given
+    # but override a settings specified n_scenarios if an explicit one is given
+    if n_scenarios is None:
+        n_scenarios = val
+
     if partitions is None:
         partitions = min(sc.defaultParallelism, n_scenarios)
 
-    seed = settings.pop("seed")
-    del settings["n_scenarios"]
     # broadcast validated settings and seed to workers
     settings_bc = sc.broadcast(settings)
     seed_bc = sc.broadcast(seed)
@@ -62,7 +69,7 @@ def run_generation(n_scenarios, settings, output_dir=None, partitions=None):
 
     # create df with input describing number of scenarios for each partition
     df = spark.createDataFrame(sc.parallelize(rows, partitions), ["shard_id", "n_scenarios"])
-    # FIXME: handle the Spark schema in a better way -- should it also support 'n' (notes)?
+    # FIXME: handle the Spark schema in a better way
     with Path("quantum_experiment_structures/data/spark_ccs_schema.json").open("r") as f:
         spark_schema = StructType.fromJson(json.load(f))
 
@@ -77,7 +84,10 @@ def run_generation(n_scenarios, settings, output_dir=None, partitions=None):
 
         for df in df_iterator:
             for shard_id, n_scenarios in df[["shard_id", "n_scenarios"]].itertuples(index=False):
-                local_seed = orig_seed + int(shard_id)
+                if orig_seed is not None:
+                    local_seed = orig_seed + int(shard_id)
+                else:
+                    local_seed = None
                 generator = qes.CCSGenerator(seed=local_seed, n_scenarios=n_scenarios, **settings)
 
                 for ccs in generator.generate():
@@ -90,10 +100,8 @@ def run_generation(n_scenarios, settings, output_dir=None, partitions=None):
         if buffer:
             yield pd.DataFrame.from_records(buffer, columns=column_names)
 
-    # distributed generation
     result_df = df.mapInPandas(generator_df_wrapper, schema=spark_schema)
 
-    # write output
     result_df.write.mode("overwrite").parquet(output_dir)
     # NOTE: from the parquet data, you can get back to the JSON form by:
     # 1) df = pd.read_parquet(path)
@@ -106,12 +114,30 @@ def run_generation(n_scenarios, settings, output_dir=None, partitions=None):
 
 def main():
     """Initialize SparkSession and run generation."""
-    _ = SparkSession.builder.master("local[*]").getOrCreate()
+    spark = SparkSession.builder.master("local[*]").getOrCreate()
 
     settings = {"seed": 0}
+    settings = {
+        "n_measurements_range": [10, 15],
+        "n_values_range": [1, 5],
+        "n_contexts_range": [2, 30],
+        "context_size_range": [2, 6],
+        "n_alternatives_range": [1, 5],
+        "enabling_relation_size_range": [1, 3],
+        "n_samples_per_causal_structure": 100,
+        "p_has_enabled": 0.7,
+        "n_alternatives_mean": 3.2,
+        "enabling_relation_size_mean": 2.1,
+        "n_scenarios": 2**12,  # 4096
+        "seed": 0,
+    }
 
     output_dir = run_generation(
-        n_scenarios=1000, settings=settings, output_dir="output", partitions=8
+        n_scenarios=None,
+        settings=settings,
+        output_dir="output",
+        partitions=8,
+        spark=spark,
     )
 
     print("Output written to:", output_dir)
