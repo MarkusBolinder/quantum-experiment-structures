@@ -26,17 +26,22 @@ def cancel_call(seconds=1.0):
     def function(function):
         def wrapper(*args, **kwargs):
             # NOTE: these signal methods only work on Unix systems
+            old_handler = signal.getsignal(signal.SIGALRM)
+            old_timer = signal.getitimer(signal.ITIMER_REAL)
+
             try:
                 signal.signal(signal.SIGALRM, timeout_handler)
                 signal.setitimer(signal.ITIMER_REAL, seconds)
-                result = function(*args, **kwargs)
-                # clear timer
-                signal.setitimer(signal.ITIMER_REAL, 0)
-                return result
+                return function(*args, **kwargs)
             except TimeoutError as e:
-                raise TimeoutError(
-                    f"Timeout: {seconds} sec reached. {function.__name__, args, kwargs}"
-                ) from e
+                raise TimeoutError(f"Timeout: {seconds} sec reached. {function.__name__}") from e
+            finally:
+                signal.setitimer(signal.ITIMER_REAL, 0)
+
+                # restore the previous handler and timer state
+                signal.signal(signal.SIGALRM, old_handler)
+                if old_timer[0] > 0 or old_timer[1] > 0:
+                    signal.setitimer(signal.ITIMER_REAL, *old_timer)  # pragma: no cover
 
         return wrapper
 
