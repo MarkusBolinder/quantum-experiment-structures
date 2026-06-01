@@ -15,20 +15,27 @@ license = { text = "MIT" }
 
 # runtime dependencies
 dependencies = [
-    "black",
-    "flake8",
-    "flake8-black",
     "graphviz",
     "jsonschema",
     "numpy",
     "matplotlib",
-    "pandas",
     "pyarrow>=15.0.0",
+]
+
+
+# development dependencies (installed with 'pip install .[dev]')
+[project.optional-dependencies]
+dev = [
+    "black",
+    "flake8",
+    "flake8-black",
+    "pandas",
     "pyproject-flake8",
     "pyspark",
     "pytest",
     "pytest-cov",
 ]
+
 
 [project.scripts]
 ccs_generator = "quantum_experiment_structures.utils.ccs_generator_script:main"
