@@ -55,6 +55,7 @@ class CCSEnumerator:
                 raise ValueError("names must have length n.")
             self.names = names
         self.n_measurements = n
+        self.stop_depth = n
         self.allow_duplicates = allow_duplicates
 
     def rename_cover(self, cover):
@@ -138,24 +139,47 @@ class CCSEnumerator:
         for relation in self._iter_antichains(candidates):
             yield self._create_valid_enabling_relation(relation)
 
-    def enumerate(self):
+    def enumerate_causal_structures(self, i, measurements):
+        """Yield every possible set of enabling relations for the meaurement variables.
+
+        Args:
+            i: The number of prior measurements that enabling relations have been created for.
+                If i equals the number of measurements, then we have created a complete causal
+                structure, and can thus yield the resulting set of enabling relations
+                (measurements).
+            measurements: The current set of measurements, represented as a valid measurement dict
+                in the CCS schema. This dict is built recursively until enabling relations have been
+                built for all measurements (enabling relations may be empty).
+        """
+        if i == self.stop_depth:
+            yield copy.deepcopy(measurements)
+            return
+
+        prior_names = self.names[:i]
+        for relation in self.iter_enabling_relations(prior_names):
+            ms_obj = {"m": self.names[i], "e": relation, "o": [{"v": 0}, {"v": 1}]}
+            yield from self.enumerate_causal_structures(i + 1, measurements + [ms_obj])
+
+    def enumerate(self, stop_depth=None):
         """Yield every causal contextuality scenario for n variables.
+
+        Args:
+            stop_depth: int indicating at what depth to stop the recursion when creating enabling
+                relations. E.g. if this is 2, then we will return from the enabling relations
+                enumerator when we have created enabling relations for up to the second measurement
+                in the linearization order. If omitted, the number of measurements will be used,
+                i.e. all measurements will have enabling relations for them created. This argument
+                is not meant to be used under any normal enumeration circumstances.
 
         Yields:
             JSON-serializable CCS objects.
         """
-        for base_cover in self.covers:
-            cover = self.rename_cover(base_cover)
+        if stop_depth is not None:
+            self.stop_depth = min(stop_depth, self.n_measurements)
+        measurements_objects = self.enumerate_causal_structures(0, [])
 
-            def build(i, acc_ms):
-                if i == self.n_measurements:
-                    yield copy.deepcopy({"ms": acc_ms, "c": cover})
-                    return
-
-                prior_names = self.names[:i]
-                for relation in self.iter_enabling_relations(prior_names):
-                    ms_obj = {"m": self.names[i], "e": relation, "o": [{"v": 0}, {"v": 1}]}
-                    yield from build(i + 1, acc_ms + [ms_obj])
-
-            yield from build(0, [])
-        print(self._candidate_contexts.cache_info())
+        for measurements in measurements_objects:
+            for base_cover in self.covers:
+                cover = self.rename_cover(base_cover)
+                ccs = {"ms": copy.deepcopy(measurements), "c": copy.deepcopy(cover)}
+                yield ccs

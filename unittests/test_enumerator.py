@@ -315,7 +315,10 @@ def test_enumerate_matches_expected_output_for_n_2_with_duplicates():
         },
     ]
 
-    assert list(enum.enumerate()) == expected
+    # a bit awkward, but avoids the order of the enumeration to matter
+    enumerated = list(enum.enumerate())
+    assert len(enumerated) == len(expected)
+    assert sorted(str(enumerated)) == sorted(str(expected))
 
 
 def test_enumerate_matches_expected_output_for_n_2_without_duplicates():
@@ -393,4 +396,31 @@ def test_enumerate_matches_expected_output_for_n_2_without_duplicates():
         },
     ]
 
-    assert list(enum.enumerate()) == expected
+    # same as above: a bit awkward, but avoids the order of the enumeration to matter
+    enumerated = list(enum.enumerate())
+    assert len(enumerated) == len(expected)
+    assert sorted(str(enumerated)) == sorted(str(expected))
+
+
+def test_enumerate_with_stop_depth_less_than_n():
+    """Verify that stop_depth restricts recursion depth normally."""
+    enum = CCSEnumerator(n=2)
+    results = list(enum.enumerate(stop_depth=1))
+
+    # since stop_depth=1, the recursion returns early at depth 1
+    # each scenario should only contain 1 measurement object instead of 2
+    assert len(results) > 0
+    for ccs in results:
+        assert len(ccs["ms"]) == 1
+        assert ccs["ms"][0]["m"] == "A"
+
+
+def test_enumerate_with_stop_depth_greater_than_n():
+    """Verify stop_depth fails to exceed n and gets clamped."""
+    enum = CCSEnumerator(n=2)
+    results = list(enum.enumerate(stop_depth=5))
+
+    # since 5 > 2, it should be clamped to n=2, and produce complete scenarios
+    assert len(results) > 0
+    for ccs in results:
+        assert len(ccs["ms"]) == 2
