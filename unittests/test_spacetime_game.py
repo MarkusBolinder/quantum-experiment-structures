@@ -11,6 +11,7 @@ from quantum_experiment_structures.spacetime_game import (
     AlternatingSpacetimeGame,
     SpacetimeGame,
 )
+from quantum_experiment_structures.utils.utils import compute_mappings_for_extensive_game
 
 
 def _assignment_set(history):
@@ -290,6 +291,35 @@ def valid_game_data():
                 "u": [{"p": "Alice", "v": 1}, {"p": "Bob", "v": 0}],
             }
         ],
+    }
+
+
+@pytest.fixture
+def three_cycle_with_additional():
+    return {
+        "ms": [
+            {
+                "m": "X",
+                "e": [],
+                "o": [{"v": 0}, {"v": 1}],
+            },
+            {
+                "m": "Y",
+                "e": [],
+                "o": [{"v": 0}, {"v": 1}],
+            },
+            {
+                "m": "Z",
+                "e": [],
+                "o": [{"v": 0}, {"v": 1}],
+            },
+            {
+                "m": "T",
+                "e": [[{"m": "Y", "v": 0}]],
+                "o": [{"v": 0}, {"v": 1}],
+            },
+        ],
+        "c": [["X", "Y", "T"], ["X", "Z"], ["Y", "Z", "T"]],
     }
 
 
@@ -1382,3 +1412,85 @@ def test_check_ab1_skips_empty_alfred_info_set():
     }
     game = AlternatingSpacetimeGame(data)
     assert game.check_ab1() is True
+
+
+def test_reduced_strategies_with_imperfect_information_parents(three_cycle_with_additional):
+    data = deepcopy(three_cycle_with_additional)
+    ccs = CausallySecuredScenario(data)
+    game = AlternatingSpacetimeGame(ccs.to_spacetime_game())
+    assert game.everything()
+    for strategy_data in game.data["rs"]:
+        player = strategy_data["p"]
+        length = 12 if player == "Alfred" else 3
+        strategies = strategy_data["s"]
+        assert len(strategies) == length
+        for strategy in strategies:
+            events = dict()
+            for assignment in strategy:
+                key = assignment["i"].split(":")[-1]
+                action = assignment["a"]
+                if action is not None:
+                    action = action.strip("{}").split(",")
+                events[key] = action
+            if player == "Alfred":
+                if events["Y"][0] == "0":
+                    assert events["T"] is not None
+                elif events["Y"][0] == "1":
+                    assert events["T"] is None
+                else:
+                    raise ValueError("Information set 'Alfred:Y' not present in strategy.")
+            else:
+                if "Y" not in events["{}"]:
+                    assert events["{(Y,0)}"] is None
+                elif "Y" in events["{}"]:
+                    assert events["{(Y,0)}"] is not None
+                else:
+                    raise ValueError("Information set 'Bob:{(Y,0)}' not present in strategy.")
+
+
+def test_conversion_to_extensive_with_bob_nodes_with_multiple_parents(three_cycle_with_additional):
+    data = deepcopy(three_cycle_with_additional)
+    ccs = CausallySecuredScenario(data)
+    game = AlternatingSpacetimeGame(ccs.to_spacetime_game())
+    order = [
+        "{}",
+        "X_{X,Y}",
+        "X_{X,Z}",
+        "Y_{X,Y}",
+        "Y_{Y,Z}",
+        "Z_{X,Z}",
+        "Z_{Y,Z}",
+        "{(Y,0)}",
+        "T_{T}",
+    ]
+    extensive = game.to_extensive_game(linearization=order)
+    # for this linearization:
+    # "{}"          -> 1 node, 3 children, 0 terminal children
+    # "Alfred:X"    -> 2 node, 4 children, 0 terminal children
+    # "Alfred:Y"    -> 3 node, 6 children, 2 terminal children
+    # "Alfred:Z"    -> 4 node, 8 children, 6 terminal children
+    # "Bob:{(Y,0)}" -> 4 node, 4 children, 0 terminal children
+    # "Alfred:T"    -> 4 node, 8 children, 8 terminal children
+    iset_to_nodes, player_to_isets = compute_mappings_for_extensive_game(extensive)
+    players = list(player_to_isets)
+    alfred = bob = None
+    for player in players:
+        if len(player_to_isets[player]) == 2:
+            bob = player
+            alfred = 1 - bob
+            break
+    assert alfred is not None and bob is not None
+    assert len(player_to_isets[alfred]) == 4
+    assert len(player_to_isets[bob]) == 2
+
+    iset_stats = set()
+    for nodes in iset_to_nodes.values():
+        nbr_nodes = len(nodes)
+        children = []
+        for node in nodes:
+            children.extend(child for child in node.get("Children", node.get("children", [])))
+        nbr_children = len(children)
+        nbr_terminal = sum(1 for child in children if child["kind"] == "outcome")
+        iset_stats.add((nbr_nodes, nbr_children, nbr_terminal))
+
+    assert iset_stats == set([(1, 3, 0), (2, 4, 0), (3, 6, 2), (4, 8, 6), (4, 4, 0), (4, 8, 8)])
