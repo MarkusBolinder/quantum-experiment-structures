@@ -1,6 +1,7 @@
 """Collection of helpful functions and classes."""
 
 import argparse
+from collections import defaultdict
 from collections.abc import Mapping
 from functools import lru_cache
 import itertools
@@ -14,6 +15,49 @@ import sys
 import jsonschema
 import numpy as np
 from quantum_experiment_structures.data.integer_sequences import DEDEKIND_NUMBERS
+
+
+def compute_mappings_for_extensive_game(extensive_game):
+    """Parse an extensive form game tree and compute iset to nodes and player to iset mappings.
+
+    Args:
+        extensive_game: Python dict valid against the extensive game form schema.Collection
+
+    Returns:
+        A tuple (iset_to_nodes, player_to_isets)
+            iset_to_nodes: A dictionary mapping information set IDs to a list of node references in
+                that information set.
+            player_to_isets A dictionary mapping player IDs to a list of unique information set IDs
+                they play in.
+    """
+    iset_to_nodes = defaultdict(list)
+    player_to_isets = defaultdict(set)
+
+    def traverse(node):
+        if not isinstance(node, dict):
+            return
+
+        if node.get("kind") == "choice":
+            player = node.get("player")
+            iset = node.get("information-set")
+
+            if iset is not None:
+                iset_to_nodes[iset].append(node)
+
+                if player is not None:
+                    player_to_isets[player].add(iset)
+
+        for child in node.get("Children", node.get("children", [])):
+            traverse(child)
+
+    traverse(extensive_game)
+
+    iset_to_nodes_dict = dict(iset_to_nodes)
+    player_to_isets_dict = {
+        player: sorted(list(isets)) for player, isets in player_to_isets.items()
+    }
+
+    return iset_to_nodes_dict, player_to_isets_dict
 
 
 # https://stackoverflow.com/questions/25027122/break-the-function-after-certain-time

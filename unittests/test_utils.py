@@ -10,6 +10,7 @@ import numpy as np
 
 from quantum_experiment_structures.data.integer_sequences import DEDEKIND_NUMBERS
 from quantum_experiment_structures.utils.utils import (
+    compute_mappings_for_extensive_game,
     cancel_call,
     json_file_size,
     json_size_bytes,
@@ -396,3 +397,182 @@ def test_cancel_call_times_out():
 
     with pytest.raises(TimeoutError, match="Timeout: 0.01 sec reached"):
         slow_function()
+
+
+def test_non_dict_node():
+    """Ensure abortion without dict."""
+    iset_map, player_map = compute_mappings_for_extensive_game("invalid_root_node_string")
+    assert iset_map == dict()
+    assert player_map == dict()
+
+
+def test_outcome_node_and_missing_children():
+    """Test computation for an outcome node."""
+    game = {"kind": "outcome", "payoffs": [1, -1]}
+    iset_map, player_map = compute_mappings_for_extensive_game(game)
+
+    assert iset_map == dict()
+    assert player_map == dict()
+
+
+def test_provided_complex_instance_integration():
+    """Test the extensive game analytics function on a complex instance."""
+    game_instance = {
+        "kind": "choice",
+        "player": 1,
+        "information-set": 0,
+        "Children": [
+            {
+                "kind": "choice",
+                "player": 0,
+                "information-set": 2,
+                "Children": [
+                    {
+                        "kind": "choice",
+                        "player": 0,
+                        "information-set": 3,
+                        "Children": [
+                            {"kind": "outcome", "payoffs": [0, 0]},
+                            {"kind": "outcome", "payoffs": [0, 0]},
+                        ],
+                    },
+                    {
+                        "kind": "choice",
+                        "player": 0,
+                        "information-set": 3,
+                        "Children": [
+                            {"kind": "outcome", "payoffs": [0, 0]},
+                            {"kind": "outcome", "payoffs": [0, 0]},
+                        ],
+                    },
+                ],
+            },
+            {
+                "kind": "choice",
+                "player": 0,
+                "information-set": 3,
+                "Children": [
+                    {
+                        "kind": "choice",
+                        "player": 0,
+                        "information-set": 4,
+                        "Children": [
+                            {
+                                "kind": "choice",
+                                "player": 1,
+                                "information-set": 1,
+                                "Children": [
+                                    {
+                                        "kind": "choice",
+                                        "player": 0,
+                                        "information-set": 5,
+                                        "Children": [
+                                            {"kind": "outcome", "payoffs": [0, 0]},
+                                            {"kind": "outcome", "payoffs": [0, 0]},
+                                        ],
+                                    }
+                                ],
+                            },
+                            {"kind": "outcome", "payoffs": [0, 0]},
+                        ],
+                    },
+                    {
+                        "kind": "choice",
+                        "player": 0,
+                        "information-set": 4,
+                        "Children": [
+                            {
+                                "kind": "choice",
+                                "player": 1,
+                                "information-set": 1,
+                                "Children": [
+                                    {
+                                        "kind": "choice",
+                                        "player": 0,
+                                        "information-set": 5,
+                                        "Children": [
+                                            {"kind": "outcome", "payoffs": [0, 0]},
+                                            {"kind": "outcome", "payoffs": [0, 0]},
+                                        ],
+                                    }
+                                ],
+                            },
+                            {"kind": "outcome", "payoffs": [0, 0]},
+                        ],
+                    },
+                ],
+            },
+            {
+                "kind": "choice",
+                "player": 0,
+                "information-set": 2,
+                "Children": [
+                    {
+                        "kind": "choice",
+                        "player": 0,
+                        "information-set": 4,
+                        "Children": [
+                            {
+                                "kind": "choice",
+                                "player": 1,
+                                "information-set": 1,
+                                "Children": [
+                                    {
+                                        "kind": "choice",
+                                        "player": 0,
+                                        "information-set": 5,
+                                        "Children": [
+                                            {"kind": "outcome", "payoffs": [0, 0]},
+                                            {"kind": "outcome", "payoffs": [0, 0]},
+                                        ],
+                                    }
+                                ],
+                            },
+                            {"kind": "outcome", "payoffs": [0, 0]},
+                        ],
+                    },
+                    {
+                        "kind": "choice",
+                        "player": 0,
+                        "information-set": 4,
+                        "Children": [
+                            {
+                                "kind": "choice",
+                                "player": 1,
+                                "information-set": 1,
+                                "Children": [
+                                    {
+                                        "kind": "choice",
+                                        "player": 0,
+                                        "information-set": 5,
+                                        "Children": [
+                                            {"kind": "outcome", "payoffs": [0, 0]},
+                                            {"kind": "outcome", "payoffs": [0, 0]},
+                                        ],
+                                    }
+                                ],
+                            },
+                            {"kind": "outcome", "payoffs": [0, 0]},
+                        ],
+                    },
+                ],
+            },
+        ],
+    }
+
+    iset_map, player_map = compute_mappings_for_extensive_game(game_instance)
+
+    # 1. Validate the aggregated mapping for players
+    # Info sets must be returned as a sorted list
+    assert player_map == {1: [0, 1], 0: [2, 3, 4, 5]}
+
+    # 2. Validate structural node assignment counts across information sets
+    assert len(iset_map[0]) == 1
+    assert len(iset_map[1]) == 4
+    assert len(iset_map[2]) == 2
+    assert len(iset_map[3]) == 3
+    assert len(iset_map[4]) == 4
+    assert len(iset_map[5]) == 4
+
+    # 3. Assert that referenced elements are identical dictionary references
+    assert iset_map[0][0] is game_instance
