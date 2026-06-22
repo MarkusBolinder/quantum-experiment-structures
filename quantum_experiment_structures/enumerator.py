@@ -23,6 +23,7 @@ class CCSEnumerator:
 
     def __init__(self, n, names=None, covers=None, allow_duplicates=False):
         """Initialize the CCSEnumerator.
+
         Args:
             n: Number of measurements.
             names: Optional measurement names.
@@ -35,7 +36,6 @@ class CCSEnumerator:
                 context contains the second and third measurement in the linearization.
             allow_duplicates: If True, allow duplicate-measurement contexts in enabling
                 relations. If False, exclude them.
-
         """
         if n < 1:
             raise ValueError("n must be at least 1.")
