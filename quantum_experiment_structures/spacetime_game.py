@@ -965,11 +965,17 @@ class SpacetimeGame:
 
             # 4) check activation preconditions
             activated = True
-            for parent in node_data["ps"]:
-                # node is activated if parent has been visited and the specified action was chosen
-                if history.get(parent["p"]) != parent["a"]:
-                    activated = False
-                    break
+            if node_data["ps"]:
+                parents_by_iset = defaultdict(list)
+                for parent in node_data["ps"]:
+                    p_iset = self.nodes[parent["p"]]["info_set_id"]
+                    parents_by_iset[p_iset].append(parent)
+
+                for parents_list in parents_by_iset.values():
+                    active_parents = [p for p in parents_list if p["p"] in history]
+                    if not active_parents or any(history[p["p"]] != p["a"] for p in active_parents):
+                        activated = False
+                        break
 
             if not activated:
                 # skip the node if it is not activated in this history
@@ -987,6 +993,10 @@ class SpacetimeGame:
                 children.append(build_tree(new_history, node_idx + 1))
 
             # NOTE: 'choice' is what the extensive form game schema identifies decision points with
+            # NOTE: the GEFII_schema.jschema defines the property 'Children' with capital 'C',
+            # however the examples available at
+            #   https://github.com/ghislainfourny/quantumgameconverter/tree/main/src/GEFII_JSONs
+            # use a lower case 'c', so it may be a typo in the schema
             return {
                 "kind": "choice",
                 "player": player_to_int[player_name],
