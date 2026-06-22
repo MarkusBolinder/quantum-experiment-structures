@@ -319,6 +319,28 @@ class CausalContextualityScenario:
                     return False
         return True
 
+    def check_enabling_events(self):
+        """Check that the enabling sets of events are consistent with measurements.
+
+        By consistent it is meant that all values associated with measurments in enabling sets of
+        events should agree with the outcomes for the corresponding measurements.
+        """
+        enabling_events = set(
+            (event["m"], event["v"])
+            for measurement_data in self.measurements.values()
+            for relation in measurement_data["e"]
+            for event in relation
+        )
+        measurements_to_outcomes = {
+            measurement: set(outcome["v"] for outcome in measurement_data["o"])
+            for measurement, measurement_data in self.measurements.items()
+        }
+        for event in enabling_events:
+            measurement, value = event
+            if value not in measurements_to_outcomes[measurement]:
+                return False
+        return True
+
     def sort_data(self):
         """Sort the cover, contexts and measurement lexicographically w.r.t. measurement names."""
         for measurement in self.data["ms"]:
