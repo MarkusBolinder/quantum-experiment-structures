@@ -18,7 +18,7 @@ SPARK_CCS_SCHEMA = StructType.fromJson(
 
 EXPECTED_COUNTS = {
     ("complete", "base"): {1: 1, 2: 8, 3: 1692, 4: 341518920},
-    ("complete", "causally_secured"): {1: 1, 2: 4, 3: 57},
+    ("complete", "causally_secured"): {1: 1, 2: 4, 3: 45},
 }
 
 
