@@ -4,7 +4,6 @@ from collections import defaultdict, deque
 import copy
 from dataclasses import dataclass
 import inspect
-from itertools import product
 import json
 from pathlib import Path
 
@@ -572,6 +571,9 @@ class StableCausalContextualityScenario(CausalContextualityScenario):
         copy_records_by_original = defaultdict(list)
         copy_lookup = dict()
 
+        # the uniquely chosen copy name for each measurement per facet
+        chosen_by_facet = [dict() for _ in self.cover]
+
         def make_copy_name(original_name, index):
             """Create a short, deterministic copy name.
 
@@ -599,74 +601,72 @@ class StableCausalContextualityScenario(CausalContextualityScenario):
                     "measurement": {
                         "m": copy_name,
                         "e": [],
-                        "o": outcomes,
+                        "o": [{"v": outcome["v"]} for outcome in outcomes],
                     },
                 }
                 copy_records_by_original[measurement_name].append(copy_record)
                 copy_lookup[(measurement_name, None, tuple())] = copy_record
+
+                for facet_index, facet in enumerate(self.cover):
+                    if measurement_name in facet:
+                        chosen_by_facet[facet_index][measurement_name] = copy_name
                 continue
 
-            for relation_index, enabling_relation in enumerate(enabling_relations):
-                parent_measurements = [event["m"] for event in enabling_relation]
+            # find required parent copy combinations from the facets where this measurement appears
+            seen_relation_parent = set()
+            for facet_index, facet in enumerate(self.cover):
+                if measurement_name not in facet:
+                    continue
 
-                # gather the created copies of each parent measurement
-                parent_copy_lists = [
-                    copy_records_by_original[parent_name] for parent_name in parent_measurements
-                ]
+                for relation_index, enabling_relation in enumerate(enabling_relations):
+                    parent_measurements = [event["m"] for event in enabling_relation]
 
-                if any(not parent_copy_list for parent_copy_list in parent_copy_lists):
-                    raise ValueError(
-                        f"Measurement '{measurement_name}' cannot be duplicated because "
-                        f"one of its parents has not been expanded yet."
-                    )
+                    # a relation is only considered if all parents are in the current facet
+                    if all(parent in facet for parent in parent_measurements):
+                        parent_names = tuple(
+                            chosen_by_facet[facet_index][parent] for parent in parent_measurements
+                        )
 
-                # every combination of parent copies corresponds to a valid copy of the measurement
-                for parent_combo in product(*parent_copy_lists):
-                    parent_names = tuple(parent_copy["name"] for parent_copy in parent_combo)
-                    copy_name = make_copy_name(
-                        measurement_name,
-                        len(copy_records_by_original[measurement_name]),
-                    )
+                        if (relation_index, parent_names) not in seen_relation_parent:
+                            seen_relation_parent.add((relation_index, parent_names))
+                            copy_name = make_copy_name(
+                                measurement_name,
+                                len(copy_records_by_original[measurement_name]),
+                            )
 
-                    copied_relation = [
-                        {
-                            "m": parent_copy["name"],
-                            "v": event["v"],
-                        }
-                        for parent_copy, event in zip(parent_combo, enabling_relation)
-                    ]
+                            copied_relation = [
+                                {"m": p_copy, "v": event["v"]}
+                                for p_copy, event in zip(parent_names, enabling_relation)
+                            ]
 
-                    copy_record = {
-                        "name": copy_name,
-                        "original": measurement_name,
-                        "parents": parent_names,
-                        "relation": relation_index,
-                        "measurement": {
-                            "m": copy_name,
-                            "e": [copied_relation],
-                            "o": outcomes,
-                        },
-                    }
+                            copy_record = {
+                                "name": copy_name,
+                                "original": measurement_name,
+                                "parents": parent_names,
+                                "relation": relation_index,
+                                "measurement": {
+                                    "m": copy_name,
+                                    "e": [copied_relation],
+                                    "o": [{"v": outcome["v"]} for outcome in outcomes],
+                                },
+                            }
 
-                    copy_records_by_original[measurement_name].append(copy_record)
-                    copy_lookup[(measurement_name, relation_index, parent_names)] = copy_record
+                            copy_records_by_original[measurement_name].append(copy_record)
+                            copy_lookup[(measurement_name, relation_index, parent_names)] = (
+                                copy_record
+                            )
 
-        # lift the cover: for each original facet, we select the unique compatible copy of every
-        # measurement that appears in that facet. Stability guarantees uniqueness
-        new_cover = []
-
-        for facet in self.cover:
-            chosen = dict()
-
-            for measurement_name in topo_order:
+            # lift the cover for this measurement: for each original facet, we select the unique
+            # compatible copy of every measurement that appears in that facet
+            # NOTE: stability should guarantee uniqueness
+            for facet_index, facet in enumerate(self.cover):
                 if measurement_name not in facet:
                     continue
 
                 candidates = []
-
                 for copy_record in copy_records_by_original[measurement_name]:
                     # admissible if all copied parents have already been chosen for this facet
-                    if set(copy_record["parents"]) <= set(chosen.values()):
+                    if set(copy_record["parents"]) <= set(chosen_by_facet[facet_index].values()):
                         candidates.append(copy_record)
 
                 if len(candidates) != 1:
@@ -675,12 +675,7 @@ class StableCausalContextualityScenario(CausalContextualityScenario):
                         f"'{measurement_name}'. Got the following candidate contexts: {candidates}."
                     )
 
-                chosen[measurement_name] = candidates[0]["name"]
-
-            new_cover.append(sorted(chosen.values()))
-
-        new_cover = self._dedupe_preserve_order(tuple(context) for context in new_cover)
-        new_cover = [list(context) for context in new_cover]
+                chosen_by_facet[facet_index][measurement_name] = candidates[0]["name"]
 
         # flatten the duplicated measurements
         new_measurements = [
@@ -689,9 +684,9 @@ class StableCausalContextualityScenario(CausalContextualityScenario):
             for copy_record in copy_records_by_original[measurement_name]
         ]
 
-        new_data = dict(self.data)
-        new_data["ms"] = new_measurements
-        new_data["c"] = new_cover
+        new_cover = sorted([sorted(list(facet_map.values())) for facet_map in chosen_by_facet])
+
+        new_data = {"ms": new_measurements, "c": new_cover}
 
         return self.__class__(new_data)
 
