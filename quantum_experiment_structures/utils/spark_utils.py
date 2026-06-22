@@ -1,8 +1,9 @@
 """Collection of utils for PySpark code that are importable in the Spark runtime environment."""
 
-import quantum_experiment_structures as qes
+import copy
 
 from pyspark.sql.types import ArrayType, MapType, StructField, StructType
+import quantum_experiment_structures as qes
 
 
 def _validate_partition(rows, secured):
@@ -72,3 +73,42 @@ def drop_nested_fields(dtype, drop_names):
         )
 
     return dtype
+
+
+def _record_is_stable(record):
+    """Check stability using the project implementation."""
+    scenario = qes.StableCausalContextualityScenario(copy.deepcopy(record))
+    try:
+        stable = scenario.all_checks()
+    except Exception:
+        stable = False
+    return stable
+
+
+def _record_is_causally_secured(record):
+    """Check whether a record is already causally secured and convertible."""
+    scenario = qes.CausallySecuredScenario(copy.deepcopy(record))
+    try:
+        secured = scenario.all_checks()
+    except Exception:
+        secured = False
+    return secured
+
+
+def _record_becomes_causally_secured_after_deduplication(record):
+    """Check whether a stable record becomes convertible after bridge deduplication."""
+    try:
+        stable = qes.StableCausalContextualityScenario(copy.deepcopy(record))
+        okay = stable.all_checks()
+        if not okay:
+            return False
+        # TODO: implement some safeguard so the test does not get stuck here
+        deduped = stable.deduplicate_causal_bridges()
+        secured = qes.CausallySecuredScenario(copy.deepcopy(deduped.data))
+        spacetime_game = secured.to_spacetime_game()
+        alternating = qes.AlternatingSpacetimeGame(copy.deepcopy(spacetime_game))
+        alternating.to_extensive_game()
+        is_secured = secured.all_checks()
+    except Exception:
+        is_secured = False
+    return is_secured
