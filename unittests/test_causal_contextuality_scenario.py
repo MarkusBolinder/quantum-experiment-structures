@@ -1,5 +1,6 @@
 """Unit tests for the causal_contextuality_scenario module."""
 
+from collections import defaultdict
 from copy import deepcopy
 from unittest.mock import patch
 
@@ -59,6 +60,27 @@ def _stable_valid_ccs_data():
             },
         ],
         "c": [["A", "C"], ["B", "C"]],
+    }
+
+
+def _complex_stable_valid_ccs_data():
+    """Build a more complex stable scenario base."""
+    return {
+        "ms": [
+            {"m": "A", "e": [], "o": [{"v": 0}, {"v": 1}]},
+            {"m": "B", "e": [], "o": [{"v": 0}, {"v": 1}]},
+            {
+                "m": "C",
+                "e": [[{"m": "A", "v": 0}], [{"m": "B", "v": 1}]],
+                "o": [{"v": 0}, {"v": 1}],
+            },
+            {
+                "m": "D",
+                "e": [[{"m": "C", "v": 0}]],
+                "o": [{"v": 0}, {"v": 1}],
+            },
+        ],
+        "c": [["A", "C", "D"], ["B", "C"]],
     }
 
 
@@ -172,6 +194,30 @@ def stable_ccs_fail_data():
     data["ms"][2]["c"] = [["A", "B", "C"]]
     data["c"] = [["A", "B", "C"]]
     return data
+
+
+@pytest.fixture
+def two_duplications_ccs_data():
+    """Return a stable CCS instance that will duplicate two measurements."""
+    data = deepcopy(_complex_stable_valid_ccs_data())
+    data["c"][1].append("D")
+    return data
+
+
+@pytest.fixture
+def one_duplication_based_on_enabling_relations():
+    """Return stable CCS where enabling relations indicate only one duplication is needed."""
+    data = deepcopy(_complex_stable_valid_ccs_data())
+    for measurement in data["ms"]:
+        if measurement["m"] == "D":
+            measurement["e"][0].append({"m": "A", "v": 0})
+    return data
+
+
+@pytest.fixture
+def one_duplication_based_on_cover():
+    """Return stable CCS where the cover indicates only one duplication is needed."""
+    return deepcopy(_complex_stable_valid_ccs_data())
 
 
 @pytest.fixture
@@ -554,6 +600,83 @@ def test_check_anti_chain_rejects_nested_cover(ccs_antichain_fail_data):
     assert ccs.check_anti_chain() is False
 
 
+def test_check_enabling_events_no_enabling_relations():
+    """Ensure flat scenarios validate."""
+    data = {
+        "ms": [
+            {"m": "A", "e": [], "o": [{"v": 0}, {"v": 1}]},
+            {"m": "B", "e": [], "o": [{"v": 0}, {"v": 1}]},
+        ],
+        "c": [["A", "B"]],
+    }
+    ccs = CausalContextualityScenario(data)
+    assert ccs.check_enabling_events() is True
+
+
+def test_check_enabling_events_perfectly_consistent():
+    """Test conistent enabling events and measurement outcomes."""
+    data = {
+        "ms": [
+            {"m": "A", "e": [], "o": [{"v": 0}, {"v": 1}]},
+            {
+                "m": "B",
+                "e": [[{"m": "A", "v": 0}], [{"m": "A", "v": 1}]],
+                "o": [{"v": 0}, {"v": 1}],
+            },
+        ],
+        "c": [["A", "B"]],
+    }
+    ccs = CausalContextualityScenario(data)
+    assert ccs.check_enabling_events() is True
+
+
+def test_check_enabling_events_multiple_events_in_single_relation():
+    """Exercise relations that contain multiple compound event constraints."""
+    data = {
+        "ms": [
+            {"m": "A", "e": [], "o": [{"v": 0}, {"v": 1}]},
+            {"m": "B", "e": [], "o": [{"v": 0}, {"v": 1}]},
+            {
+                "m": "C",
+                "e": [[{"m": "A", "v": 0}, {"m": "B", "v": 1}]],
+                "o": [{"v": 0}],
+            },
+        ],
+        "c": [["A", "B", "C"]],
+    }
+    ccs = CausalContextualityScenario(data)
+    assert ccs.check_enabling_events() is True
+
+
+def test_check_enabling_events_inconsistent_value():
+    """Check that inconsistent value in relation fails."""
+    data = {
+        "ms": [
+            {"m": "A", "e": [], "o": [{"v": 0}, {"v": 1}]},
+            {
+                "m": "B",
+                "e": [[{"m": "A", "v": 99}]],
+                "o": [{"v": 0}],
+            },
+        ],
+        "c": [["A", "B"]],
+    }
+    ccs = CausalContextualityScenario(data)
+    assert ccs.check_enabling_events() is False
+
+
+def test_check_enabling_events_missing_measurement_reference():
+    """Force invalid measurement to fail."""
+    data = {
+        "ms": [{"m": "B", "e": [[{"m": "NonExistentMeasurement", "v": 0}]], "o": [{"v": 0}]}],
+        "c": [["B"]],
+    }
+    ccs = CausalContextualityScenario(data)
+
+    with pytest.raises(KeyError):
+        ccs.check_enabling_events()
+
+
 def test_all_checks_pass(secured_ccs_data):
     """Verify that the full secured CCS pipeline passes."""
     ccs = CausallySecuredScenario(deepcopy(secured_ccs_data))
@@ -619,24 +742,91 @@ def test_check_no_cycles_rejects_cycle(secured_cycle_fail_data):
     assert ccs.check_no_cycles() is False
 
 
-def test_deduplicate_causal_bridges_raises_when_parent_copy_list_empty():
-    """Force deduplication to fail when a parent copy list is empty."""
+def test_stability_with_two_duplications(two_duplications_ccs_data):
+    """Check that two measurements are duplicated when deduplicating causal bridges."""
+    ccs = StableCausalContextualityScenario(deepcopy(two_duplications_ccs_data))
+    deduped = ccs.deduplicate_causal_bridges()
+    measurement_splits = defaultdict(int)
+    for measurement, measurement_data in deduped.measurements.items():
+        assert len(measurement_data["e"]) <= 1
+        measurement_splits[measurement[0]] += 1
+    expected = set([("A", 1), ("B", 1), ("C", 2), ("D", 2)])
+    got = set(item for item in measurement_splits.items())
+    assert got == expected
+    assert len(deduped.measurements) == len(ccs.measurements) + 2
+    assert set(measurement for context in deduped.cover for measurement in context) == set(
+        deduped.measurements
+    )
+    assert deduped.everything()
+
+
+def test_stability_one_duplication(
+    one_duplication_based_on_enabling_relations, one_duplication_based_on_cover
+):
+    """Test only one duplicate measurement is created when enabling relations disallow more."""
+    data_array = [one_duplication_based_on_enabling_relations, one_duplication_based_on_cover]
+    for data in data_array:
+        ccs = StableCausalContextualityScenario(deepcopy(data))
+        deduped = ccs.deduplicate_causal_bridges()
+        measurement_splits = defaultdict(int)
+        for measurement, measurement_data in deduped.measurements.items():
+            assert len(measurement_data["e"]) <= 1
+            measurement_splits[measurement[0]] += 1
+        expected = set([("A", 1), ("B", 1), ("C", 2), ("D", 1)])
+        got = set(item for item in measurement_splits.items())
+        assert got == expected
+        assert len(deduped.measurements) == len(ccs.measurements) + 1
+        assert set(measurement for context in deduped.cover for measurement in context) == set(
+            deduped.measurements
+        )
+        assert deduped.everything()
+
+
+def test_multiple_duplications():
+    """Duplicate multiple times and check consistency."""
     data = {
         "ms": [
-            {"m": "A", "e": [], "o": [{"v": 0}]},
-            {"m": "B", "e": [[{"m": "A", "v": 0}]], "o": [{"v": 0}]},
+            {"m": "A", "e": [], "o": [{"v": 0}, {"v": 1}]},
+            {"m": "B", "e": [], "o": [{"v": 0}, {"v": 1}]},
+            {"m": "C", "e": [], "o": [{"v": 0}, {"v": 1}]},
+            {"m": "D", "e": [], "o": [{"v": 0}, {"v": 1}]},
+            {
+                "m": "E",
+                "e": [[{"m": "A", "v": 0}], [{"m": "B", "v": 1}]],
+                "o": [{"v": 0}, {"v": 1}],
+            },
+            {
+                "m": "F",
+                "e": [[{"m": "C", "v": 0}], [{"m": "D", "v": 1}]],
+                "o": [{"v": 0}, {"v": 1}],
+            },
+            {
+                "m": "G",
+                "e": [[{"m": "E", "v": 0}], [{"m": "F", "v": 1}]],
+                "o": [{"v": 0}, {"v": 1}],
+            },
         ],
-        "c": [["A", "B"]],
+        "c": [["A", "E", "G"], ["B", "E", "G"], ["C", "F", "G"], ["D", "F", "G"]],
     }
-    ccs = StableCausalContextualityScenario(deepcopy(data))
-
-    with patch.object(
-        StableCausalContextualityScenario,
-        "_topological_order",
-        return_value=["B", "A"],
-    ):
-        with pytest.raises(ValueError, match="has not been expanded yet"):
-            ccs.deduplicate_causal_bridges()
+    ccs = StableCausalContextualityScenario(data)
+    deduped = ccs.deduplicate_causal_bridges()
+    measurement_splits = defaultdict(int)
+    for measurement, measurement_data in deduped.measurements.items():
+        assert len(measurement_data["e"]) <= 1
+        measurement_splits[measurement[0]] += 1
+    expected = set([("A", 1), ("B", 1), ("C", 1), ("D", 1), ("E", 2), ("F", 2), ("G", 4)])
+    got = set(item for item in measurement_splits.items())
+    assert got == expected
+    assert len(deduped.measurements) == len(ccs.measurements) + 5
+    assert set(measurement for context in deduped.cover for measurement in context) == set(
+        deduped.measurements
+    )
+    for c1 in deduped.cover:
+        for c2 in deduped.cover:
+            if c1 == c2:
+                continue
+            assert not c1 & c2
+    assert deduped.everything()
 
 
 def test_get_transitive_enabling_continues_on_seen_nodes():
