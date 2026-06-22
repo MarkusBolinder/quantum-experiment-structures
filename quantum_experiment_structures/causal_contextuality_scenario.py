@@ -752,14 +752,17 @@ class CausallySecuredScenario(StableCausalContextualityScenario):
             tau_bars[m] = t_bar
 
         for facet in self.cover:
-            # 1) propagation: ∀C' ∈ C, ∀x ∈ C, support(τ(x)) ⊆ C'
+            # 1) propagation: ∀C' ∈ C, ∀x ∈ C', support(τ(x)) ⊆ C'
             for x in facet:
                 enabling_relations = self.measurements[x]["e"]
                 if not enabling_relations:
                     continue
-                support = set(event["m"] for event in enabling_relations[0])
-                if not support <= facet:
-                    return False
+                # NOTE: a causally secured cover does not require unique causal bridges,
+                # so we check that the support of every enabling relation is contained
+                for relation in enabling_relations:
+                    support = set(event["m"] for event in relation)
+                    if not support <= facet:
+                        return False
 
             # 2) consistency: (τ_bar(x) ∪ τ_bar(y)) must be consistent for all x, y in C
             facet_list = list(facet)
