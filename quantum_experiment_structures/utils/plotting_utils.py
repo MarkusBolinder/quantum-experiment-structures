@@ -193,8 +193,8 @@ def plot_extensive_game(
             iset_members[iset_id].append(current_id)
 
             # NOTE: the schema defines the property 'Children' with a capital 'C',
-            # but other properties are not defined with a capital letter
-            children = node.get("Children", [])
+            # but other properties are not defined with a capital letter (maybe a typo)
+            children = node.get("children", node.get("Children", []))
             for i, child in enumerate(children):
                 build_tree(child, parent_id=current_id, edge_label=str(i))
 
