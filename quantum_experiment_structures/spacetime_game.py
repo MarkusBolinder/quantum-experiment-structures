@@ -387,21 +387,24 @@ class SpacetimeGame:
                     # a child node is reachable if parent requirements are met
                     parents = child_info["node_data"]["ps"]
 
-                    child_reachable = True
+                    parent_info_sets = set(
+                        self.nodes[parent["p"]]["info_set_id"] for parent in parents
+                    )
+                    active_parent_info_sets = set()
                     for p in parents:
                         parent, parent_action = p.values()
                         p_iset = self.nodes[parent]["info_set_id"]
 
                         # if the parent node is not reachable, or the required action
                         # is not among the 'possible' actions, we cannot reach this child
-                        if parent not in reachable_nodes or (
-                            self.info_sets[p_iset]["p"] == player
-                            and strategy_map.get(p_iset) != parent_action
+                        if parent in reachable_nodes and (
+                            self.info_sets[p_iset]["p"] != player
+                            or strategy_map.get(p_iset) == parent_action
                         ):
-                            child_reachable = False
-                            break
+                            active_parent_info_sets.add(p_iset)
                         # NOTE: for other players, we already assume any of their
                         # actions are possible if their node is reachable
+                    child_reachable = parent_info_sets == active_parent_info_sets
 
                     if child_reachable:
                         reachable_nodes.add(child_name)
