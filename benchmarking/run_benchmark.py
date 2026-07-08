@@ -106,6 +106,13 @@ def parse_args():
         "(it will overwrite existing).",
     )
 
+    parser.add_argument(
+        "--workers",
+        type=int,
+        default=1,
+        help="Number of parallel worker processes to use. If 1 or omitted, runs sequentially.",
+    )
+
     return parser.parse_args()
 
 
@@ -142,7 +149,7 @@ def main():
         timeout_retry_same_input=args.timeout_retry,
     )
 
-    rows = run_benchmark(config)
+    rows = run_benchmark(config, num_workers=args.workers)
     save_results(rows, config)
 
     if args.plot:

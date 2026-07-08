@@ -27,7 +27,7 @@ def _format_label(object_name, stage, mode):
             "game",
             "adds",
             "both",
-        ): "Adding (complete) histories and (reduced) strategies to spacetime game",
+        ): "Adding histories and strategies to spacetime game",
         ("game", "checks", "both"): "Running all correctness checks on spacetime game",
         ("game", "to_extensive", "none"): "Converting spacetime game to extensive form game",
         ("generator", "generate", "none"): "Generating (causally secured) CCS",
@@ -38,7 +38,7 @@ def _format_label(object_name, stage, mode):
             "final_size",
             "both",
         ): "Size of spacetime game after adding histories and strategies",
-        ("game", "final_size", "none"): "Size of spacetime game (without histories and strategies)",
+        ("game", "final_size", "none"): "Size of spacetime game (w/o histories and strategies)",
         ("game", "initial_size", "none"): "Initial size of spacetime game",
     }
     label = label_map.get((object_name, stage, str(mode)))
@@ -56,6 +56,7 @@ def plot_metric(df, metric, title, ylabel, output_path, logy=False):
     fig, ax = plt.subplots(figsize=(10, 6))
     handles = []
     labels = []
+    min_n = max_n = 0
 
     for (object_name, stage, mode), group in agg.groupby(
         ["object_name", "stage", "mode"], dropna=False
@@ -63,6 +64,8 @@ def plot_metric(df, metric, title, ylabel, output_path, logy=False):
         group = group.sort_values("n_measurements")
         label = _format_label(object_name, stage, mode)
         x = group["n_measurements"].to_numpy()
+        max_n = np.max(x)
+        min_n = np.min(x)
         y = group["mean"].to_numpy()
         yerr = group["std"].fillna(0.0).to_numpy()
 
@@ -72,6 +75,7 @@ def plot_metric(df, metric, title, ylabel, output_path, logy=False):
 
     ax.set_title(title)
     ax.set_xlabel("Number of measurements")
+    plt.xticks(range(int(min_n), int(max_n) + 1))
     ax.set_ylabel(ylabel)
     if logy:
         ax.set_yscale("log")

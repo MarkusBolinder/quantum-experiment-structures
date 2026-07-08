@@ -115,6 +115,7 @@ def _profile_method(
     repeat_index,
     seed,
     timeout_trackers,
+    lock=None,
 ):
     method_name, bound_method = profiling_utils.resolve_first_callable(obj, candidate_names)
 
@@ -124,6 +125,7 @@ def _profile_method(
         callable_factory=bound_method,
         config=config,
         timeout_trackers=timeout_trackers,
+        lock=lock,
     )
 
     return BenchmarkRow(
@@ -146,38 +148,29 @@ def _profile_method(
     )
 
 
-def _record_size_row(
-    n_measurements, repeat_index, seed, object_name, stage, mode, obj, data_attr="data"
+def _run_adaptive_profile(
+    stage_key, profile_name, callable_factory, config, timeout_trackers, lock=None
 ):
-    data = getattr(obj, data_attr, obj)
-    return BenchmarkRow(
-        n_measurements=n_measurements,
-        repeat_index=repeat_index,
-        seed=seed,
-        object_name=object_name,
-        stage=stage,
-        mode=mode,
-        method_name=None,
-        wall_time_s=None,
-        cpu_time_s=None,
-        json_size_bytes=utils.json_size_bytes(data),
-        error=None,
-    )
-
-
-def _run_adaptive_profile(stage_key, profile_name, callable_factory, config, timeout_trackers):
     """Run a callable with optional adaptive percentile-based timeout."""
 
-    tracker = timeout_trackers.get(stage_key)
-    if tracker is None:
-        tracker = profiling_utils.RollingPercentileTracker(
-            percentile=config.timeout_percentile,
-            min_samples=config.timeout_min_samples,
-            base_time_s=config.timeout_base_s,
-            history_size=config.timeout_history_size,
-            multiplier=config.timeout_multiplier,
-        )
-        timeout_trackers[stage_key] = tracker
+    # process-safe retrieval of tracker details
+    if lock:
+        lock.acquire()
+    try:
+        tracker = timeout_trackers.get(stage_key)
+        if tracker is None:
+            tracker = profiling_utils.RollingPercentileTracker(
+                percentile=config.timeout_percentile,
+                min_samples=config.timeout_min_samples,
+                base_time_s=config.timeout_base_s,
+                history_size=config.timeout_history_size,
+                multiplier=config.timeout_multiplier,
+            )
+            timeout_trackers[stage_key] = tracker
+        budget_s = tracker.budget_s()
+    finally:
+        if lock:
+            lock.release()
 
     use_timeout = config.adaptive_timeout_enabled and config.timeout_percentile is not None
 
@@ -188,10 +181,17 @@ def _run_adaptive_profile(stage_key, profile_name, callable_factory, config, tim
             collect_garbage=config.collect_garbage,
         )
         if prof.error is None:
-            tracker.observe_success(prof.wall_time_s)
+            if lock:
+                lock.acquire()
+            try:
+                tracker = timeout_trackers.get(stage_key)
+                tracker.observe_success(prof.wall_time_s)
+                timeout_trackers[stage_key] = tracker  # force write-back to manager proxy
+            finally:
+                if lock:
+                    lock.release()
         return prof, False, None, 0
 
-    budget_s = tracker.budget_s()
     attempt_index = 0
 
     while True:
@@ -201,17 +201,26 @@ def _run_adaptive_profile(stage_key, profile_name, callable_factory, config, tim
             timeout_s=budget_s,
         )
 
-        if not timed_result.killed:
-            tracker.observe_success(timed_result.wall_time_s)
-            return timed_result, False, budget_s, attempt_index
+        if lock:
+            lock.acquire()
+        try:
+            tracker = timeout_trackers.get(stage_key)
+            if not timed_result.killed:
+                tracker.observe_success(timed_result.wall_time_s)
+                timeout_trackers[stage_key] = tracker
+                return timed_result, False, budget_s, attempt_index
 
-        tracker.observe_kill()
+            tracker.observe_kill()
+            timeout_trackers[stage_key] = tracker
+        finally:
+            if lock:
+                lock.release()
 
         if not config.timeout_retry_same_input:
             return timed_result, True, budget_s, attempt_index
 
 
-def run_single_case(config, n_measurements, repeat_index, timeout_trackers):
+def run_single_case(config, n_measurements, repeat_index, timeout_trackers, lock=None):
     """Run one scenario size and one repeat."""
     seed = config.base_seed + 10_000 * repeat_index + n_measurements
     generator_settings = dict(DEFAULT_BASE_GENERATOR_SETTINGS)
@@ -226,6 +235,7 @@ def run_single_case(config, n_measurements, repeat_index, timeout_trackers):
         callable_factory=partial(run_generator_case, generator),
         config=config,
         timeout_trackers=timeout_trackers,
+        lock=lock,
     )
     generated = getattr(gen_prof, "value", None)
 
@@ -252,11 +262,9 @@ def run_single_case(config, n_measurements, repeat_index, timeout_trackers):
     if generated is None:
         return rows
 
-    # TODO: should we try to generate more data to get an average for the generation time too?
     ccs_data = generated[0].data
     ccs = qes.CausallySecuredScenario(ccs_data)
 
-    # the ccs from the generator have been funneled through ccs.everything(), so no need for it here
     rows.append(
         _record_size_row(
             n_measurements=n_measurements,
@@ -275,6 +283,7 @@ def run_single_case(config, n_measurements, repeat_index, timeout_trackers):
         callable_factory=partial(run_ccs_to_spacetime, ccs),
         config=config,
         timeout_trackers=timeout_trackers,
+        lock=lock,
     )
 
     spacetime_raw = getattr(ccs_to_st_prof, "value", None)
@@ -290,13 +299,17 @@ def run_single_case(config, n_measurements, repeat_index, timeout_trackers):
             method_name="to_spacetime_game",
             wall_time_s=ccs_to_st_prof.wall_time_s,
             cpu_time_s=ccs_to_st_prof.cpu_time_s,
-            json_size_bytes=None,  # will be recorded as initial_size
+            json_size_bytes=None,
             error=ccs_to_st_prof.error,
             killed=killed,
             timeout_budget_s=budget_s,
             attempt_index=attempt_index,
             observed_elapsed_s=gen_prof.wall_time_s,
-            termination_reason="timeout" if killed else "exception" if gen_prof.error else None,
+            termination_reason="timeout"
+            if killed
+            else "exception"
+            if ccs_to_st_prof.error
+            else None,
         )
     )
     if spacetime_raw is None:
@@ -329,6 +342,7 @@ def run_single_case(config, n_measurements, repeat_index, timeout_trackers):
                     repeat_index=repeat_index,
                     seed=seed,
                     timeout_trackers=timeout_trackers,
+                    lock=lock,
                 )
             )
         elif operation == "adds":
@@ -344,6 +358,7 @@ def run_single_case(config, n_measurements, repeat_index, timeout_trackers):
                     repeat_index=repeat_index,
                     seed=seed,
                     timeout_trackers=timeout_trackers,
+                    lock=lock,
                 )
             )
 
@@ -365,6 +380,7 @@ def run_single_case(config, n_measurements, repeat_index, timeout_trackers):
         callable_factory=partial(run_game_to_extensive, game),
         config=config,
         timeout_trackers=timeout_trackers,
+        lock=lock,
     )
 
     extensive = getattr(game_to_ext_prof, "value", None)
@@ -386,7 +402,11 @@ def run_single_case(config, n_measurements, repeat_index, timeout_trackers):
             timeout_budget_s=budget_s,
             attempt_index=attempt_index,
             observed_elapsed_s=gen_prof.wall_time_s,
-            termination_reason="timeout" if killed else "exception" if gen_prof.error else None,
+            termination_reason="timeout"
+            if killed
+            else "exception"
+            if game_to_ext_prof.error
+            else None,
         )
     )
     if extensive is None:
@@ -409,6 +429,25 @@ def run_single_case(config, n_measurements, repeat_index, timeout_trackers):
     )
 
     return rows
+
+
+def _record_size_row(
+    n_measurements, repeat_index, seed, object_name, stage, mode, obj, data_attr="data"
+):
+    data = getattr(obj, data_attr, obj)
+    return BenchmarkRow(
+        n_measurements=n_measurements,
+        repeat_index=repeat_index,
+        seed=seed,
+        object_name=object_name,
+        stage=stage,
+        mode=mode,
+        method_name=None,
+        wall_time_s=None,
+        cpu_time_s=None,
+        json_size_bytes=utils.json_size_bytes(data),
+        error=None,
+    )
 
 
 def compute_correlations(rows):
@@ -548,23 +587,80 @@ def compute_correlations(rows):
     return pd.DataFrame(summaries), runtime_df
 
 
-def run_benchmark(config):
-    """Run the full benchmark sweep."""
+def _worker_task(task_args):
+    """Global level bridge function for ProcessPoolExecutor mapping."""
+    config, n_measurements, repeat_index, timeout_trackers, lock = task_args
+    return run_single_case(config, n_measurements, repeat_index, timeout_trackers, lock)
+
+
+def run_benchmark(config, num_workers=1):
+    """Run the full benchmark sweep sequentially or in parallel."""
     config.validate()
     config.ensure_dirs()
 
     all_rows = []
-    timeout_trackers = dict()
 
-    try:
-        for n_measurements in range(config.n_min, config.n_max + 1, config.n_step):
-            print(f"Profiling scenarios with {n_measurements=} variables.")
-            for repeat_index in range(config.repeats):
-                print(f"Repetition {repeat_index + 1}/{config.repeats}.")
-                rows = run_single_case(config, n_measurements, repeat_index, timeout_trackers)
-                all_rows.extend(rows)
-    except KeyboardInterrupt:
-        print("\n[!] Benchmark interrupted by user (SIGINT). Returning collected results so far...")
+    if num_workers <= 1:
+        # sequential behavior
+        timeout_trackers = dict()
+        try:
+            for n_measurements in range(config.n_min, config.n_max + 1, config.n_step):
+                print(f"Profiling scenarios with {n_measurements=} variables.")
+                for repeat_index in range(config.repeats):
+                    print(f"Repetition {repeat_index + 1}/{config.repeats}.")
+                    rows = run_single_case(config, n_measurements, repeat_index, timeout_trackers)
+                    all_rows.extend(rows)
+        except KeyboardInterrupt:
+            print(
+                "\n[!] Benchmark interrupted by user (SIGINT). Returning collected results so far..."
+            )
+    else:
+        import multiprocessing
+        from concurrent.futures import ProcessPoolExecutor, as_completed
+
+        tasks = [
+            (n_measurements, repeat_index)
+            for n_measurements in range(config.n_min, config.n_max + 1, config.n_step)
+            for repeat_index in range(config.repeats)
+        ]
+
+        print(
+            f"Running benchmark in parallel using {num_workers} workers across {len(tasks)} tasks."
+        )
+
+        with multiprocessing.Manager() as manager:
+            timeout_trackers = manager.dict()
+            lock = manager.Lock()
+
+            # prepare picklable arguments for the process pool
+            worker_tasks = [
+                (config, n_meas, rep_idx, timeout_trackers, lock) for n_meas, rep_idx in tasks
+            ]
+
+            completed_tasks = 0
+            try:
+                with ProcessPoolExecutor(max_workers=num_workers) as executor:
+                    futures = [executor.submit(_worker_task, task) for task in worker_tasks]
+
+                    for future in as_completed(futures):
+                        completed_tasks += 1
+                        try:
+                            rows = future.result()
+                            all_rows.extend(rows)
+                            if rows:
+                                n_meas = rows[0].n_measurements
+                                rep = rows[0].repeat_index
+                                print(
+                                    f"[{completed_tasks}/{len(tasks)}] Finished profiling: n={n_meas}, repeat={rep + 1}"
+                                )
+                        except Exception as e:
+                            print(f"[!] Worker task raised an exception: {e}")
+                            if not config.continue_on_error:
+                                raise
+            except KeyboardInterrupt:
+                print(
+                    "\n[!] Benchmark interrupted by user (SIGINT). Stopping workers and collecting data..."
+                )
 
     return all_rows
 
