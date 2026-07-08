@@ -21,14 +21,36 @@ def _aggregate(df, metric):
 
 def _format_label(object_name, stage, mode):
     """Format a compact legend label."""
-    parts = [str(object_name), str(stage)]
-    if mode not in (None, "", "none", "None", "NaN", "nan"):
-        parts.append(str(mode))
-    return ":".join(parts)
+    label_map = {
+        ("ccs", "to_spacetime", "none"): "Converting CCS to spacetime game",
+        (
+            "game",
+            "adds",
+            "both",
+        ): "Adding (complete) histories and (reduced) strategies to spacetime game",
+        ("game", "checks", "both"): "Running all correctness checks on spacetime game",
+        ("game", "to_extensive", "none"): "Converting spacetime game to extensive form game",
+        ("generator", "generate", "none"): "Generating (causally secured) CCS",
+        ("ccs", "size", "both"): "Size of (causally secured) CCS",
+        ("extensive", "size", "nan"): "Size of extensive form game",
+        (
+            "game",
+            "final_size",
+            "both",
+        ): "Size of spacetime game after adding histories and strategies",
+        ("game", "final_size", "none"): "Size of spacetime game (without histories and strategies)",
+        ("game", "initial_size", "none"): "Initial size of spacetime game",
+    }
+    label = label_map.get((object_name, stage, str(mode)))
+    if label is not None:
+        return label
+    else:
+        return input(f"Label for {(object_name, stage, mode)=}: ")
 
 
 def plot_metric(df, metric, title, ylabel, output_path, logy=False):
     """Plot mean and std of a metric across measurement counts."""
+    df = df[df[metric].notna() & (~df["killed"])].copy()
     agg = _aggregate(df, metric)
 
     fig, ax = plt.subplots(figsize=(10, 6))

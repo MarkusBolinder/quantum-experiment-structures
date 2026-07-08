@@ -555,12 +555,17 @@ def run_benchmark(config):
 
     all_rows = []
     timeout_trackers = dict()
-    for n_measurements in range(config.n_min, config.n_max + 1, config.n_step):
-        print(f"Profiling scenarios with {n_measurements=} variables.")
-        for repeat_index in range(config.repeats):
-            print(f"Repetition {repeat_index + 1}/{config.repeats}.")
-            rows = run_single_case(config, n_measurements, repeat_index, timeout_trackers)
-            all_rows.extend(rows)
+
+    try:
+        for n_measurements in range(config.n_min, config.n_max + 1, config.n_step):
+            print(f"Profiling scenarios with {n_measurements=} variables.")
+            for repeat_index in range(config.repeats):
+                print(f"Repetition {repeat_index + 1}/{config.repeats}.")
+                rows = run_single_case(config, n_measurements, repeat_index, timeout_trackers)
+                all_rows.extend(rows)
+    except KeyboardInterrupt:
+        print("\n[!] Benchmark interrupted by user (SIGINT). Returning collected results so far...")
+
     return all_rows
 
 
