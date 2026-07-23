@@ -1404,9 +1404,9 @@ def test_canonical_signature_sorts_relations_within_measurement():
     signature = ccs._canonical_signature_for_order(["A", "B", "C"])
 
     assert signature == (
-        tuple(),
-        tuple(),
-        ((("A", 1),), (("B", 0),)),
+        ((-1, ((0, ()),)), ()),
+        ((-1, ((0, ()),)), ()),
+        ((0, ()), ((("A", 1),), (("B", 0),))),
     )
 
 
@@ -1515,7 +1515,7 @@ def test_canonicalize_enabling_equivalence_closes_transitively_and_refreshes_hum
     ccs = CausalContextualityScenario(deepcopy(dirty_not_transitively_closed_canonical_data))
     assert ccs._check_transitively_closed_enabling_relations() is False
 
-    ccs.canonicalize_enabling_equivalence(ensure_transitively_closed=True)
+    ccs.canonicalize_enabling_equivalence()
 
     assert ccs._check_transitively_closed_enabling_relations() is True
     assert ccs.data["h"]["ms"] == "{A, B, C}"
@@ -1542,7 +1542,7 @@ def test_canonicalize_enabling_equivalence_skips_closure_when_not_requested(
         lambda: pytest.fail("closure should not be called"),
     )
 
-    ccs.canonicalize_enabling_equivalence(ensure_transitively_closed=False)
+    ccs.canonicalize_enabling_equivalence()
 
     assert ccs.data["ms"][2]["e"] == [[{"m": "A", "v": 0}]]
 
@@ -1696,11 +1696,8 @@ def test_canonicalize_enabling_equivalence_ignores_self_reference():
     """Canonicalize a scenario whose dependency graph contains a self-reference."""
     ccs = CausalContextualityScenario(deepcopy(_self_reference_ccs_data()))
 
-    ccs.canonicalize_enabling_equivalence(ensure_transitively_closed=False)
-
-    assert [measurement["m"] for measurement in ccs.data["ms"]] == ["A", "B"]
-    assert ccs.data["c"] == [["A", "B"]]
-    assert ccs.data["ms"][1]["e"] == [[{"m": "A", "v": 0}, {"m": "B", "v": 0}]]
+    with pytest.raises(ValueError, match="Cycle detected in enabling relations"):
+        ccs.canonicalize_enabling_equivalence()
 
 
 def test_canonicalize_enabling_equivalence_recomputes_human_readable_when_closed(monkeypatch):
@@ -1742,7 +1739,7 @@ def test_canonicalize_enabling_equivalence_recomputes_human_readable_when_closed
         fake_human,
     )
 
-    ccs.canonicalize_enabling_equivalence(ensure_transitively_closed=True)
+    ccs.canonicalize_enabling_equivalence()
 
     assert calls["closed"] == 1
     assert calls["human"] == 1
@@ -1771,7 +1768,82 @@ def test_canonicalize_enabling_equivalence_skips_closure_when_already_closed(mon
         fake_closed,
     )
 
-    ccs.canonicalize_enabling_equivalence(ensure_transitively_closed=True)
+    ccs.canonicalize_enabling_equivalence()
 
     assert calls["closed"] == 0
     assert [measurement["m"] for measurement in ccs.data["ms"]] == ["A"]
+
+
+def test_canonicalize_enabling_equivalence_prefers_deeper_dependency_chain():
+    """Prefer the root that feeds a deeper causal chain over an isolated root."""
+    data = {
+        "ms": [
+            {"m": "A", "e": [], "o": [{"v": 0}, {"v": 1}]},
+            {"m": "B", "e": [], "o": [{"v": 0}, {"v": 1}]},
+            {"m": "C", "e": [[{"m": "B", "v": 0}]], "o": [{"v": 0}, {"v": 1}]},
+            {"m": "D", "e": [[{"m": "C", "v": 0}]], "o": [{"v": 0}, {"v": 1}]},
+        ],
+        "c": [["A", "B", "C", "D"]],
+    }
+    equivalent_data = {
+        "ms": [
+            {"m": "A", "e": [], "o": [{"v": 0}, {"v": 1}]},
+            {"m": "B", "e": [[{"m": "A", "v": 0}]], "o": [{"v": 0}, {"v": 1}]},
+            {"m": "C", "e": [[{"m": "A", "v": 0}, {"m": "B", "v": 0}]], "o": [{"v": 0}, {"v": 1}]},
+            {"m": "D", "e": [], "o": [{"v": 0}, {"v": 1}]},
+        ],
+        "c": [["A", "B", "C", "D"]],
+    }
+    ccs = CausalContextualityScenario(data)
+
+    ccs.canonicalize_enabling_equivalence()
+    ccs.add_human_readable()
+
+    assert [measurement["m"] for measurement in ccs.data["ms"]] == ["A", "B", "C", "D"]
+    assert set(
+        tuple((event["m"], event["v"]) for event in relation)
+        for measurement in ccs.measurements.values()
+        for relation in measurement["e"]
+    ) == set([(("A", 0),), (("A", 0), ("B", 0))])
+    assert ccs.data["c"] == [["A", "B", "C", "D"]]
+
+    equivalent_ccs = CausalContextualityScenario(equivalent_data)
+    equivalent_ccs.canonicalize_enabling_equivalence()
+
+    ccs.add_human_readable()
+    equivalent_ccs.add_human_readable()
+    h = ccs.data["h"]
+    equiv_h = equivalent_ccs.data["h"]
+    assert (
+        h["ms"] + h["o"] + h["e"] + h["c"]
+        == equiv_h["ms"] + equiv_h["o"] + equiv_h["e"] + equiv_h["c"]
+    )
+
+
+def test_canonicalize_enabling_equivalence_calls_add_leaves_when_outcomes_have_leaves(
+    monkeypatch,
+):
+    """Exercise the leaves branch in canonicalize_enabling_equivalence."""
+    data = {
+        "ms": [
+            {
+                "m": "A",
+                "e": [],
+                "o": [{"v": 0, "l": False}, {"v": 1, "l": True}],
+            },
+            {
+                "m": "B",
+                "e": [[{"m": "A", "v": 0}]],
+                "o": [{"v": 0, "l": False}, {"v": 1, "l": True}],
+            },
+        ],
+        "c": [["A", "B"]],
+    }
+    ccs = CausalContextualityScenario(deepcopy(data))
+    ccs.add_human_readable()
+    monkeypatch.setattr(utils, "_topological_orders", lambda nodes, parents: iter([("A", "B")]))
+    key = ccs.data["h"]["ms"] + ccs.data["h"]["o"] + ccs.data["h"]["e"] + ccs.data["h"]["c"]
+    ccs.canonicalize_enabling_equivalence()
+    new_key = ccs.data["h"]["ms"] + ccs.data["h"]["o"] + ccs.data["h"]["e"] + ccs.data["h"]["c"]
+    assert new_key == key
+    assert ccs.check_leaves()
