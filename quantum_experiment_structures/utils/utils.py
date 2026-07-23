@@ -59,6 +59,44 @@ def minimal_antichain_enabling_relations(enabling_relations):
     return [[{"m": m, "v": v} for m, v in sorted(relation)] for relation in minimal_relations]
 
 
+def _topological_orders(nodes, parents):
+    """Enumerate all legal linearizations consistent with the dependency graph."""
+    remaining_parents = {node: set(parents[node]) for node in nodes}
+    remaining = set(nodes)
+
+    def backtrack(prefix, available):
+        if not remaining:
+            yield tuple(prefix)
+            return
+
+        # deterministic branching order
+        for node in sorted(available):
+            next_prefix = prefix + [node]
+            next_remaining = remaining - {node}
+
+            next_remaining_parents = {n: (remaining_parents[n] - {node}) for n in next_remaining}
+            next_available = [
+                n for n in next_remaining if not next_remaining_parents[n] and n not in next_prefix
+            ]
+
+            old_remaining = set(remaining)
+            old_parents = dict(remaining_parents)
+            try:
+                remaining.clear()
+                remaining.update(next_remaining)
+                remaining_parents.clear()
+                remaining_parents.update(next_remaining_parents)
+                yield from backtrack(next_prefix, next_available)
+            finally:
+                remaining.clear()
+                remaining.update(old_remaining)
+                remaining_parents.clear()
+                remaining_parents.update(old_parents)
+
+    initial_available = [node for node in nodes if not remaining_parents[node]]
+    yield from backtrack([], initial_available)
+
+
 def compute_transitive_closures(data, consistent=True):
     """Compute transitive closures of all enabling relations in a CCS.
 

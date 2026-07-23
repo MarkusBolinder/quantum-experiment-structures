@@ -486,6 +486,149 @@ class CausalContextualityScenario:
             and self._check_transitively_closed_enabling_relations()
         )
 
+    @staticmethod
+    def _excel_name(index):
+        """Return the canonical measurement name for a zero-based index.
+
+        Note:
+            This assumes that the scenario has 26 or fewer measurements.
+        """
+        if index < 0:
+            raise ValueError("index must be non-negative")
+
+        name = []
+        index += 1
+        while index > 0:
+            # TODO: handle arbitrarily many measurements
+            index, rem = divmod(index - 1, 26)
+            name.append(chr(ord("A") + rem))
+        return "".join(reversed(name))
+
+    def _canonical_signature_for_order(self, order):
+        """Serialize the enabling structure under a fixed measurement order."""
+        rename = {old_name: self._excel_name(i) for i, old_name in enumerate(order)}
+
+        per_measurement = []
+        for old_name in order:
+            measurement = self.measurements[old_name]
+            rels = []
+
+            for enabling_relation in measurement["e"]:
+                events = tuple(
+                    sorted((rename[event["m"]], event["v"]) for event in enabling_relation)
+                )
+                rels.append(events)
+
+            per_measurement.append(tuple(sorted(rels)))
+
+        return tuple(per_measurement)
+
+    def _apply_measurement_renaming(self, order):
+        """Rewrite the scenario in place using the given canonical measurement order."""
+        rename = {old_name: self._excel_name(i) for i, old_name in enumerate(order)}
+
+        new_ms = []
+        for old_name in order:
+            measurement = self.measurements[old_name]
+
+            new_measurement = dict()
+            new_measurement["m"] = rename[old_name]
+
+            new_measurement["e"] = [
+                [
+                    {"m": rename[event["m"]], "v": event["v"]}
+                    for event in sorted(
+                        enabling_relation,
+                        key=lambda event: (rename[event["m"]], event["v"]),
+                    )
+                ]
+                for enabling_relation in measurement["e"]
+            ]
+            new_measurement["e"] = sorted(
+                new_measurement["e"],
+                key=lambda rel: (
+                    len(rel),
+                    tuple((event["m"], event["v"]) for event in rel),
+                ),
+            )
+
+            new_measurement["o"] = [{"v": outcome["v"]} for outcome in measurement["o"]]
+
+            if "c" in measurement:
+                new_measurement["c"] = sorted(
+                    [sorted(rename[name] for name in context) for context in measurement["c"]],
+                    key=lambda ctx: tuple(ctx),
+                )
+
+            new_ms.append(new_measurement)
+
+        self.data["ms"] = new_ms
+        # force the enabling sets of events for a measurement to be an antichain
+        for measurement in self.data["ms"]:
+            if len(measurement["e"]) < 1:
+                continue
+            measurement["e"] = utils.minimal_antichain_enabling_relations(measurement["e"])
+        self.measurements = {measurement["m"]: measurement for measurement in self.data["ms"]}
+
+        # rewrite the global cover consistently
+        self.data["c"] = sorted(
+            [sorted(rename[name] for name in context) for context in self.data["c"]],
+            key=lambda ctx: tuple(ctx),
+        )
+        self.cover = set(frozenset(context) for context in self.data["c"])
+
+    def canonicalize_enabling_equivalence(self):
+        """Compute a canonical key for CCS enabling-equivalence.
+
+        The equivalence relation is:
+            - cover is always part of the identity of the scenario
+            - enabling relations are compared up to relabeling of measurements
+            - only relabelings consistent with the enabling dependency graph are allowed
+
+        Returns:
+            A dictionary with:
+                - cover_key: exact cover key, kept distinct across different covers.
+                - enabling_key: canonical enabling-structure key.
+                - scenario_key: a combined stable key suitable for deduplication.
+        """
+        if not self._check_transitively_closed_enabling_relations():
+            self.transitively_close_enabling_relations()
+        leaves = any(
+            "l" in outcome
+            for measurement in self.measurements.values()
+            for outcome in measurement["o"]
+        )
+
+        nodes = list(self.measurements)
+        parents = defaultdict(set)
+
+        for target, measurement in self.measurements.items():
+            for enabling_relation in measurement["e"]:
+                for event in enabling_relation:
+                    source = event["m"]
+                    if source == target:
+                        continue
+                    parents[target].add(source)
+
+        best_signature = None
+        best_order = None
+
+        for order in utils._topological_orders(nodes, parents):
+            signature = self._canonical_signature_for_order(order)
+            if best_signature is None or signature < best_signature:
+                best_signature = signature
+                best_order = order
+
+        if best_signature is None:
+            raise ValueError("No valid topological order exists for this scenario.")
+
+        self._apply_measurement_renaming(best_order)
+        if leaves:
+            self.add_leaves()
+        if "h" in self.data:
+            self.add_human_readable()
+        return self
+
     def sort_data(self):
         """Sort the cover, contexts and measurement lexicographically w.r.t. measurement names."""
         for measurement in self.data["ms"]:
