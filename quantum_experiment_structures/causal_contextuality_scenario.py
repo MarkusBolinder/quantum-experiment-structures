@@ -3,6 +3,7 @@
 from collections import defaultdict, deque
 import copy
 from dataclasses import dataclass
+from functools import lru_cache
 import inspect
 import json
 from pathlib import Path
@@ -500,9 +501,33 @@ class CausalContextualityScenario:
             name.append(chr(ord("A") + rem))
         return "".join(reversed(name))
 
+    def _dependency_structure_signature(self):
+        """Return a recursive structural signature for each measurement.
+
+        This prefers nodes that lead into simpler / lexicographically smaller
+        downstream structures.
+        """
+        children = defaultdict(set)
+
+        for target, measurement in self.measurements.items():
+            for enabling_relation in measurement["e"]:
+                for event in enabling_relation:
+                    source = event["m"]
+                    if source != target:
+                        children[source].add(target)
+
+        @lru_cache(None)
+        def sig(node):
+            # sort child signatures so the representation is canonical
+            child_sigs = tuple(sorted(sig(child) for child in children[node]))
+            return (-len(child_sigs), child_sigs)
+
+        return {name: sig(name) for name in self.measurements}
+
     def _canonical_signature_for_order(self, order):
         """Serialize the enabling structure under a fixed measurement order."""
         rename = {old_name: self._excel_name(i) for i, old_name in enumerate(order)}
+        structure_sig = self._dependency_structure_signature()
 
         per_measurement = []
         for old_name in order:
@@ -515,7 +540,7 @@ class CausalContextualityScenario:
                 )
                 rels.append(events)
 
-            per_measurement.append(tuple(sorted(rels)))
+            per_measurement.append((structure_sig[old_name], tuple(sorted(rels))))
 
         return tuple(per_measurement)
 
@@ -587,6 +612,7 @@ class CausalContextualityScenario:
                 - enabling_key: canonical enabling-structure key.
                 - scenario_key: a combined stable key suitable for deduplication.
         """
+        # NOTE: this check detects any cycles present in the enabling relation
         if not self._check_transitively_closed_enabling_relations():
             self.transitively_close_enabling_relations()
         leaves = any(
@@ -602,8 +628,6 @@ class CausalContextualityScenario:
             for enabling_relation in measurement["e"]:
                 for event in enabling_relation:
                     source = event["m"]
-                    if source == target:
-                        continue
                     parents[target].add(source)
 
         best_signature = None
