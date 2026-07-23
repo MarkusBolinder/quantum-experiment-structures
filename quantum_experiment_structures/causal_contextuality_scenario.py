@@ -491,6 +491,7 @@ class CausalContextualityScenario:
         for measurement in self.data["ms"]:
             if "c" in measurement:
                 measurement["c"] = sorted(sorted(context) for context in measurement["c"])
+            measurement["o"] = sorted(measurement["o"], key=lambda outcome: outcome["v"])
         self.data["ms"] = sorted(self.data["ms"], key=lambda measurement: measurement["m"])
         self.data["c"] = sorted(sorted(context) for context in self.data["c"])
 
