@@ -1,10 +1,7 @@
 import gc
-import json
-import os
 import time
 from collections import deque
 from dataclasses import dataclass, field
-from pathlib import Path
 from typing import Any
 
 from quantum_experiment_structures.utils import utils
@@ -25,7 +22,6 @@ class ProfileResult:
 def profile_callable(
     stage,
     func,
-    measure_memory=True,
     collect_garbage=True,
 ):
     """Profile a zero-argument callable.
@@ -54,9 +50,6 @@ def profile_callable(
     finally:
         wall_time_s = time.perf_counter() - wall_start
         cpu_time_s = time.process_time() - cpu_start
-
-        current_bytes = None
-        peak_bytes = None
 
     profile_result = ProfileResult(
         value=result,

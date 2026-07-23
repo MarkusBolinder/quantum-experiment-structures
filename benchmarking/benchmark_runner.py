@@ -1,7 +1,8 @@
+from copy import deepcopy
 import csv
-import json
 from dataclasses import asdict, dataclass
 from functools import partial
+import gc
 from typing import Any
 
 import numpy as np
@@ -11,8 +12,6 @@ from quantum_experiment_structures.utils import utils
 
 import profiling_utils
 
-CHECK_CANDIDATES = ("all_checks",)
-ADD_CANDIDATES = ("all_adds",)
 
 DEFAULT_BASE_GENERATOR_SETTINGS = {
     "n_values_range": [2, 5],
@@ -68,28 +67,12 @@ def run_generator_case(generator):
     return list(generator.generate())
 
 
-def run_ccs_checks(ccs):
-    return ccs.all_checks()
-
-
-def run_ccs_adds(ccs):
-    return ccs.all_adds()
-
-
 def run_ccs_to_spacetime(ccs):
     return ccs.to_spacetime_game()
 
 
-def run_game_checks(game):
-    return game.all_checks()
-
-
-def run_game_adds(game):
-    return game.all_adds()
-
-
 def run_game_to_extensive(game):
-    return game.to_extensive_game()
+    return game.to_extensive_game(match_utility=False)
 
 
 def _mode_to_operations(mode):
@@ -100,8 +83,47 @@ def _mode_to_operations(mode):
     if mode == "adds":
         return ["adds"]
     if mode == "both":
-        return ["checks", "adds"]
+        # adds should happen before checks
+        return ["adds", "checks"]
     raise ValueError(f"Unknown mode: {mode}")
+
+
+def _get_methods_to_profile(obj, operation_type, granular=False):
+    """Discover methods to profile on an object dynamically.
+
+    Returns:
+        a list of tuples: (method_name, bound_method)
+    """
+    methods = []
+    if operation_type == "none":
+        return methods
+    names = []
+    is_scenario = obj.__class__.__name__ == "CausallySecuredScenario"
+    # always aggregate checks
+    if operation_type == "checks":
+        if is_scenario:
+            methods.append(("is_scenario_clean", getattr(obj, "is_scenario_clean")))
+        elif granular:
+            names = [name for name in dir(obj) if name.startswith("check_")]
+            # TODO: somehow aggregate all checks for AlternatingSpacetimeGame
+        else:
+            methods.append(("all_checks", getattr(obj, "all_checks")))
+    elif granular:
+        if not is_scenario:
+            # force order: histories, played info sets, reduced strategies
+            names = sorted([name for name in dir(obj) if name.startswith("add_")])
+        else:
+            names = ["transitively_close_enabling_relations"]
+    elif not is_scenario:
+        # aggregated behavior
+        methods.append(("all_adds", getattr(obj, "all_adds")))
+    # add all actual methods
+    for name in names:
+        attr = getattr(obj, name)
+        if callable(attr):
+            methods.append((name, attr))
+
+    return methods
 
 
 def _profile_method(
@@ -109,24 +131,38 @@ def _profile_method(
     stage,
     mode,
     obj,
-    candidate_names,
+    method_name,
+    bound_method,
     config,
     n_measurements,
     repeat_index,
     seed,
     timeout_trackers,
     lock=None,
+    record_size=False,
 ):
-    method_name, bound_method = profiling_utils.resolve_first_callable(obj, candidate_names)
-
+    # unique stage_key allows independent adaptive timeout ceilings per method
     prof, killed, budget_s, attempt_index = _run_adaptive_profile(
-        stage_key=f"{object_name}.{stage}",
-        profile_name=f"{object_name}.{stage}",
+        stage_key=f"{object_name}.{stage}.{method_name}",
+        profile_name=f"{object_name}.{stage}.{method_name}",
         callable_factory=bound_method,
         config=config,
         timeout_trackers=timeout_trackers,
         lock=lock,
     )
+
+    json_size = None
+    if record_size and not killed and prof.error is None:
+        data = getattr(obj, "data", obj)
+        json_size = utils.json_size_bytes(data)
+
+    wall_time_extracted = prof.wall_time_s
+    cpu_time_extracted = prof.cpu_time_s
+    error_extracted = prof.error
+
+    del prof
+    if config.collect_garbage:
+        gc.collect()
 
     return BenchmarkRow(
         n_measurements=n_measurements,
@@ -136,15 +172,15 @@ def _profile_method(
         stage=stage,
         mode=mode,
         method_name=method_name,
-        wall_time_s=prof.wall_time_s,
-        cpu_time_s=prof.cpu_time_s,
-        json_size_bytes=None,
-        error=prof.error,
+        wall_time_s=wall_time_extracted,
+        cpu_time_s=cpu_time_extracted,
+        json_size_bytes=json_size,
+        error=error_extracted,
         killed=killed,
         timeout_budget_s=budget_s,
         attempt_index=attempt_index,
-        observed_elapsed_s=prof.wall_time_s,
-        termination_reason="timeout" if killed else "exception" if prof.error else None,
+        observed_elapsed_s=wall_time_extracted,
+        termination_reason="timeout" if killed else "exception" if error_extracted else None,
     )
 
 
@@ -152,8 +188,6 @@ def _run_adaptive_profile(
     stage_key, profile_name, callable_factory, config, timeout_trackers, lock=None
 ):
     """Run a callable with optional adaptive percentile-based timeout."""
-
-    # process-safe retrieval of tracker details
     if lock:
         lock.acquire()
     try:
@@ -186,14 +220,13 @@ def _run_adaptive_profile(
             try:
                 tracker = timeout_trackers.get(stage_key)
                 tracker.observe_success(prof.wall_time_s)
-                timeout_trackers[stage_key] = tracker  # force write-back to manager proxy
+                timeout_trackers[stage_key] = tracker
             finally:
                 if lock:
                     lock.release()
         return prof, False, None, 0
 
     attempt_index = 0
-
     while True:
         attempt_index += 1
         timed_result = profiling_utils.profile_callable_with_timeout(
@@ -259,11 +292,17 @@ def run_single_case(config, n_measurements, repeat_index, timeout_trackers, lock
             termination_reason="timeout" if killed else "exception" if gen_prof.error else None,
         )
     )
+    gen_prof = None
+    if config.collect_garbage:
+        gc.collect()
     if generated is None:
         return rows
 
     ccs_data = generated[0].data
     ccs = qes.CausallySecuredScenario(ccs_data)
+    del generated
+    if config.collect_garbage:
+        gc.collect()
 
     rows.append(
         _record_size_row(
@@ -277,6 +316,28 @@ def run_single_case(config, n_measurements, repeat_index, timeout_trackers, lock
         )
     )
 
+    # profile CCS active operations based on config.ccs_mode
+    for operation in _mode_to_operations(config.ccs_mode):
+        methods = _get_methods_to_profile(ccs, operation, granular=config.granular)
+        for method_name, bound_method in methods:
+            rows.append(
+                _profile_method(
+                    object_name="ccs",
+                    stage=method_name if config.granular else operation,
+                    mode=config.ccs_mode,
+                    obj=ccs,
+                    method_name=method_name,
+                    bound_method=bound_method,
+                    config=config,
+                    n_measurements=n_measurements,
+                    repeat_index=repeat_index,
+                    seed=seed,
+                    timeout_trackers=timeout_trackers,
+                    lock=lock,
+                    record_size=False,
+                )
+            )
+
     ccs_to_st_prof, killed, budget_s, attempt_index = _run_adaptive_profile(
         stage_key="ccs.to_spacetime",
         profile_name="ccs.to_spacetime",
@@ -287,6 +348,9 @@ def run_single_case(config, n_measurements, repeat_index, timeout_trackers, lock
     )
 
     spacetime_raw = getattr(ccs_to_st_prof, "value", None)
+    ccs = None
+    if config.collect_garbage:
+        gc.collect()
 
     rows.append(
         BenchmarkRow(
@@ -304,7 +368,7 @@ def run_single_case(config, n_measurements, repeat_index, timeout_trackers, lock
             killed=killed,
             timeout_budget_s=budget_s,
             attempt_index=attempt_index,
-            observed_elapsed_s=gen_prof.wall_time_s,
+            observed_elapsed_s=ccs_to_st_prof.wall_time_s,
             termination_reason="timeout"
             if killed
             else "exception"
@@ -312,10 +376,17 @@ def run_single_case(config, n_measurements, repeat_index, timeout_trackers, lock
             else None,
         )
     )
+    ccs_to_st_prof = None
+    if config.collect_garbage:
+        gc.collect()
     if spacetime_raw is None:
         return rows
 
     game = qes.AlternatingSpacetimeGame(spacetime_raw)
+    del spacetime_raw
+    if config.collect_garbage:
+        gc.collect()
+
     rows.append(
         _record_size_row(
             n_measurements=n_measurements,
@@ -329,38 +400,102 @@ def run_single_case(config, n_measurements, repeat_index, timeout_trackers, lock
     )
 
     for operation in _mode_to_operations(config.game_mode):
-        if operation == "checks":
-            rows.append(
-                _profile_method(
-                    object_name="game",
-                    stage="checks",
-                    mode=config.game_mode,
-                    obj=game,
-                    candidate_names=CHECK_CANDIDATES,
-                    config=config,
-                    n_measurements=n_measurements,
-                    repeat_index=repeat_index,
-                    seed=seed,
-                    timeout_trackers=timeout_trackers,
-                    lock=lock,
+        granular_adding = config.granular and operation == "adds"
+
+        if granular_adding:
+            methods_dict = dict(_get_methods_to_profile(game, operation, granular=True))
+            # add histories and played info sets
+            game_hist = deepcopy(game)
+
+            if "add_histories" in methods_dict:
+                rows.append(
+                    _profile_method(
+                        object_name="game",
+                        stage="add_histories",
+                        mode=config.game_mode,
+                        obj=game_hist,
+                        method_name="add_histories",
+                        bound_method=getattr(game_hist, "add_histories"),
+                        config=config,
+                        n_measurements=n_measurements,
+                        repeat_index=repeat_index,
+                        seed=seed,
+                        timeout_trackers=timeout_trackers,
+                        lock=lock,
+                        record_size=True,
+                    )
                 )
-            )
-        elif operation == "adds":
-            rows.append(
-                _profile_method(
-                    object_name="game",
-                    stage="adds",
-                    mode=config.game_mode,
-                    obj=game,
-                    candidate_names=ADD_CANDIDATES,
-                    config=config,
-                    n_measurements=n_measurements,
-                    repeat_index=repeat_index,
-                    seed=seed,
-                    timeout_trackers=timeout_trackers,
-                    lock=lock,
+
+            if "add_played_information_sets" in methods_dict:
+                rows.append(
+                    _profile_method(
+                        object_name="game",
+                        stage="add_played_information_sets",
+                        mode=config.game_mode,
+                        obj=game_hist,
+                        method_name="add_played_information_sets",
+                        bound_method=getattr(game_hist, "add_played_information_sets"),
+                        config=config,
+                        n_measurements=n_measurements,
+                        repeat_index=repeat_index,
+                        seed=seed,
+                        timeout_trackers=timeout_trackers,
+                        lock=lock,
+                        record_size=True,
+                    )
                 )
-            )
+
+            # handle strategies separately
+            game_strat = deepcopy(game)
+            if "add_reduced_strategies" in methods_dict:
+                rows.append(
+                    _profile_method(
+                        object_name="game",
+                        stage="add_reduced_strategies_isolated",
+                        mode=config.game_mode,
+                        obj=game_strat,
+                        method_name="add_reduced_strategies",
+                        bound_method=getattr(game_strat, "add_reduced_strategies"),
+                        config=config,
+                        n_measurements=n_measurements,
+                        repeat_index=repeat_index,
+                        seed=seed,
+                        timeout_trackers=timeout_trackers,
+                        lock=lock,
+                        record_size=True,
+                    )
+                )
+
+            # combine strategies and histories into the same game
+            game_combined = game_hist
+            game_combined.data["rs"] = game_strat.data["rs"]
+            game = game_combined
+            del game_hist
+            del game_strat
+            if config.collect_garbage:
+                gc.collect()
+
+        else:
+            # if not granular, just process normally
+            methods = _get_methods_to_profile(game, operation, granular=config.granular)
+            for method_name, bound_method in methods:
+                rows.append(
+                    _profile_method(
+                        object_name="game",
+                        stage=method_name if config.granular else operation,
+                        mode=config.game_mode,
+                        obj=game,
+                        method_name=method_name,
+                        bound_method=bound_method,
+                        config=config,
+                        n_measurements=n_measurements,
+                        repeat_index=repeat_index,
+                        seed=seed,
+                        timeout_trackers=timeout_trackers,
+                        lock=lock,
+                        record_size=False,
+                    )
+                )
 
     rows.append(
         _record_size_row(
@@ -384,6 +519,9 @@ def run_single_case(config, n_measurements, repeat_index, timeout_trackers, lock
     )
 
     extensive = getattr(game_to_ext_prof, "value", None)
+    game = None
+    if config.collect_garbage:
+        gc.collect()
 
     rows.append(
         BenchmarkRow(
@@ -401,7 +539,7 @@ def run_single_case(config, n_measurements, repeat_index, timeout_trackers, lock
             killed=killed,
             timeout_budget_s=budget_s,
             attempt_index=attempt_index,
-            observed_elapsed_s=gen_prof.wall_time_s,
+            observed_elapsed_s=game_to_ext_prof.wall_time_s,
             termination_reason="timeout"
             if killed
             else "exception"
@@ -409,6 +547,9 @@ def run_single_case(config, n_measurements, repeat_index, timeout_trackers, lock
             else None,
         )
     )
+    game_to_ext_prof = None
+    if config.collect_garbage:
+        gc.collect()
     if extensive is None:
         return rows
 
@@ -427,6 +568,9 @@ def run_single_case(config, n_measurements, repeat_index, timeout_trackers, lock
             error=None,
         )
     )
+    del extensive
+    if config.collect_garbage:
+        gc.collect()
 
     return rows
 
@@ -458,6 +602,8 @@ def compute_correlations(rows):
 
     size_source_map = {
         ("generator", "generate"): "ccs_final",
+        ("ccs", "checks"): "ccs_final",
+        ("ccs", "adds"): "ccs_final",
         ("ccs", "to_spacetime"): "game_initial",
         ("game", "checks"): "game_final",
         ("game", "adds"): "game_final",
@@ -476,20 +622,20 @@ def compute_correlations(rows):
         lambda row: size_key_map.get((row["object_name"], row["stage"])),
         axis=1,
     )
-    size_df = size_df[size_df["size_source"].notna()].copy()
+    size_df = size_df[size_df["size_source"].notna()].copy()  # type: ignore
 
-    size_df = size_df.groupby(run_cols + ["size_source"], dropna=False, as_index=False)[
-        "json_size_bytes"
-    ].first()
+    size_df = size_df.groupby(  # type: ignore
+        run_cols + ["size_source"], dropna=False, as_index=False
+    )["json_size_bytes"].first()
 
     runtime_df = df[df["wall_time_s"].notna() & (~df["killed"])].copy()
     runtime_df["size_source"] = runtime_df.apply(
         lambda row: size_source_map.get((row["object_name"], row["stage"])),
         axis=1,
     )
-    runtime_df = runtime_df[runtime_df["size_source"].notna()].copy()
+    runtime_df = runtime_df[runtime_df["size_source"].notna()].copy()  # type: ignore
 
-    runtime_df = runtime_df.merge(
+    runtime_df = runtime_df.merge(  # type: ignore
         size_df,
         on=run_cols + ["size_source"],
         how="left",
@@ -523,7 +669,7 @@ def compute_correlations(rows):
 
     summaries = []
 
-    for (object_name, stage, mode), group in runtime_df.groupby(
+    for (object_name, stage, mode), group in runtime_df.groupby(  # type: ignore
         ["object_name", "stage", "mode"],
         dropna=False,
         sort=False,
@@ -532,14 +678,11 @@ def compute_correlations(rows):
         wall = group["wall_time_s"].to_numpy(dtype=float)
         cpu = group["cpu_time_s"].to_numpy(dtype=float)
 
-        # Spearman is probably better here because ther is very high variance (outliers)
-        # Spearman > Pearson => monotonic but non-linear correlation
         pearson_wall = _pearson(x_size, wall)
         spearman_wall = _spearman(x_size, wall)
         pearson_cpu = _pearson(x_size, cpu)
         spearman_cpu = _spearman(x_size, cpu)
 
-        # log-log to see how the scaling is correlated
         log_mask_wall = (x_size > 0) & (wall > 0)
         log_mask_cpu = (x_size > 0) & (cpu > 0)
 
@@ -571,7 +714,7 @@ def compute_correlations(rows):
                 "stage": stage,
                 "mode": mode,
                 "samples": len(group),
-                "killed_count": int(group["killed"].sum()),
+                "killed_count": int(group["killed"].sum()),  # type: ignore
                 "size_source": group["size_source"].iloc[0],
                 "pearson_size_wall": pearson_wall,
                 "spearman_size_wall": spearman_wall,
@@ -601,7 +744,6 @@ def run_benchmark(config, num_workers=1):
     all_rows = []
 
     if num_workers <= 1:
-        # sequential behavior
         timeout_trackers = dict()
         try:
             for n_measurements in range(config.n_min, config.n_max + 1, config.n_step):
@@ -632,7 +774,6 @@ def run_benchmark(config, num_workers=1):
             timeout_trackers = manager.dict()
             lock = manager.Lock()
 
-            # prepare picklable arguments for the process pool
             worker_tasks = [
                 (config, n_meas, rep_idx, timeout_trackers, lock) for n_meas, rep_idx in tasks
             ]
@@ -666,7 +807,7 @@ def run_benchmark(config, num_workers=1):
 
 
 def save_results(rows, config):
-    """Save results to CSV and JSONL."""
+    """Save results to CSV."""
     config.ensure_dirs()
 
     fieldnames = list(rows[0].as_dict().keys()) if rows else []
@@ -676,10 +817,6 @@ def save_results(rows, config):
         writer.writeheader()
         for row in rows:
             writer.writerow(row.as_dict())
-
-    with config.output_jsonl.open("w", encoding="utf-8") as f_jsonl:
-        for row in rows:
-            f_jsonl.write(json.dumps(row.as_dict()) + "\n")
 
     correlation_df, sizes_merged_df = compute_correlations(rows)
     sizes_merged_df.to_csv(config.output_dir / "sizes.csv", index=False)

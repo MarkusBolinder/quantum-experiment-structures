@@ -18,21 +18,20 @@ def parse_args():
         "--n-min",
         type=int,
         default=1,
-        help="The minimum number of measurements to start the benchamark at.",
+        help="The minimum number of measurements to start the benchmark at.",
     )
     parser.add_argument(
         "--n-max",
         type=int,
         default=30,
-        help="The maximum number of measurements to end the benchamark at.",
+        help="The maximum number of measurements to end the benchmark at.",
     )
     parser.add_argument("--n-step", type=int, default=1, help="Step size between scenario sizes.")
     parser.add_argument(
-        "--repeats", type=int, default=5, help="Number of samples gathered for one scneario size."
+        "--repeats", type=int, default=5, help="Number of samples gathered for one scenario size."
     )
     parser.add_argument("--seed", type=int, default=1, help="Seed for reproducibility.")
 
-    # TODO: allow for finer granularity, it should be possible to specify individual methods
     parser.add_argument(
         "--ccs-mode",
         choices=["none", "checks", "adds", "both"],
@@ -44,6 +43,12 @@ def parse_args():
         choices=["none", "checks", "adds", "both"],
         default="both",
         help="Which methods should be run for the spacetime game.",
+    )
+
+    parser.add_argument(
+        "--granular",
+        action="store_true",
+        help="Profile each individual check/add method separately instead of aggregating.",
     )
 
     parser.add_argument(
@@ -120,10 +125,6 @@ def main():
     """Run the benchmark and optionally create plots."""
     args = parse_args()
 
-    if args.produce_plots:
-        plot_results(args.produce_plots / "results.csv", args.produce_plots / "plots")
-        exit()
-
     config = BenchmarkConfig(
         n_min=args.n_min,
         n_max=args.n_max,
@@ -135,9 +136,9 @@ def main():
         extensive=args.no_extensive,
         collect_garbage=not args.no_gc,
         continue_on_error=not args.stop_on_error,
+        granular=args.granular,
         output_dir=args.output_dir,
         output_csv=args.output_dir / "results.csv",
-        output_jsonl=args.output_dir / "results.jsonl",
         plot_dir=args.output_dir / "plots",
         generator=GeneratorConfig(),
         adaptive_timeout_enabled=args.adaptive_timeout,
@@ -149,14 +150,21 @@ def main():
         timeout_retry_same_input=args.timeout_retry,
     )
 
+    if args.produce_plots:
+        plot_results(
+            args.produce_plots / "results.csv",
+            args.produce_plots / "plots",
+            granular=config.granular,
+        )
+        exit()
+
     rows = run_benchmark(config, num_workers=args.workers)
     save_results(rows, config)
 
     if args.plot:
-        plot_results(config.output_csv, config.plot_dir)
+        plot_results(config.output_csv, config.plot_dir, granular=config.granular)
 
     print(f"Saved CSV file(s) to: {config.output_dir}")
-    print(f"Saved JSONL to: {config.output_jsonl}")
     if args.plot:
         print(f"Saved plots to: {config.plot_dir}")
 

@@ -54,6 +54,7 @@ class BenchmarkConfig:
     extensive: bool = True
     collect_garbage: bool = True
     continue_on_error: bool = True
+    granular: bool = False  # allows switching between aggregated and per-method reporting
 
     adaptive_timeout_enabled: bool = False
     timeout_percentile: float = 95.0
