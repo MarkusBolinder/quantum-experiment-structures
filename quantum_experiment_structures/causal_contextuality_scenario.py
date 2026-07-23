@@ -85,7 +85,12 @@ class CausalContextualityScenario:
 
     def __repr__(self):
         if "h" in self.data:
-            return "\n".join(f"{k:6s}: {v}" for k, v in self.data["h"].items())
+            return "\n".join(
+                f"{k:6s}: {v}"
+                for k, v in sorted(
+                    self.data["h"].items(), key=lambda kv: {"ms": 0, "o": 1, "e": 2, "c": 3}[kv[0]]
+                )
+            )
         return str(self.data)
 
     def validate(self):
