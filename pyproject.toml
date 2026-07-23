@@ -78,12 +78,18 @@ exclude = [
 
 [tool.coverage.run]
 omit = [
-    "quantum_experiment_structures/data/*",
-    "quantum_experiment_structures/utils/*analysis*.py",
-    "quantum_experiment_structures/utils/*analyze*.py",
-    "quantum_experiment_structures/utils/*ccs*.py",
-    "quantum_experiment_structures/utils/cluster*.py",
-    "quantum_experiment_structures/utils/*datasets*.py",
-    "quantum_experiment_structures/utils/*_utils.py",
     "quantum_experiment_structures/__version__.py",
+    "quantum_experiment_structures/data/*",
+    "quantum_experiment_structures/utils/ccs_generator_script.py",
+    "quantum_experiment_structures/utils/cluster_ccs_enumerator.py",
+    "quantum_experiment_structures/utils/cluster_ccs_generator.py",
+    "quantum_experiment_structures/utils/cluster_combiner.py",
+    "quantum_experiment_structures/utils/compute_covers_cluster.py",
+    "quantum_experiment_structures/utils/create_final_complete_dataset.py",
+    "quantum_experiment_structures/utils/dynamically_repartition_and_sort_datasets.py",
+    "quantum_experiment_structures/utils/dynamically_repartition_datasets.py",
+    "quantum_experiment_structures/utils/full_analysis.py",
+    "quantum_experiment_structures/utils/plotting_utils.py",
+    "quantum_experiment_structures/utils/remove_equivalent_scenarios.py",
+    "quantum_experiment_structures/utils/spark_utils.py",
 ]
