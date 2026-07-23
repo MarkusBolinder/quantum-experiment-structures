@@ -10,6 +10,8 @@ import numpy as np
 
 from quantum_experiment_structures.data.integer_sequences import DEDEKIND_NUMBERS
 from quantum_experiment_structures.utils.utils import (
+    _topological_orders,
+    compute_transitive_closures,
     compute_mappings_for_extensive_game,
     cancel_call,
     json_file_size,
@@ -576,3 +578,241 @@ def test_provided_complex_instance_integration():
 
     # 3. Assert that referenced elements are identical dictionary references
     assert iset_map[0][0] is game_instance
+
+
+@pytest.fixture
+def simple_data():
+    return {
+        "ms": [
+            {"m": "A", "e": [], "o": [{"v": 0}, {"v": 1}]},
+            {"m": "B", "e": [[{"m": "A", "v": 0}]], "o": [{"v": 0}, {"v": 1}]},
+            {"m": "C", "e": [[{"m": "B", "v": 1}]], "o": [{"v": 0}, {"v": 1}]},
+        ],
+        "c": [["A", "B", "C"]],
+    }
+
+
+@pytest.fixture
+def branching_data():
+    return {
+        "ms": [
+            {"m": "A", "e": [], "o": [{"v": 0}, {"v": 1}]},
+            {
+                "m": "B",
+                "e": [[{"m": "A", "v": 0}], [{"m": "A", "v": 1}]],
+                "o": [{"v": 0}, {"v": 1}],
+            },
+            {
+                "m": "C",
+                "e": [
+                    [{"m": "A", "v": 1}],
+                    [{"m": "B", "v": 1}],
+                ],
+                "o": [{"v": 0}, {"v": 1}],
+            },
+        ],
+        "c": [["A", "B", "C"]],
+    }
+
+
+@pytest.fixture
+def conflict_chain_data():
+    return {
+        "ms": [
+            {"m": "A", "e": [], "o": [{"v": 0}, {"v": 1}]},
+            {"m": "B", "e": [[{"m": "A", "v": 0}]], "o": [{"v": 0}, {"v": 1}]},
+            {"m": "D", "e": [[{"m": "B", "v": 1}, {"m": "A", "v": 1}]], "o": [{"v": 0}, {"v": 1}]},
+        ],
+        "c": [["A", "B", "D"]],
+    }
+
+
+@pytest.fixture
+def cycle_data():
+    return {
+        "ms": [
+            {"m": "A", "e": [[{"m": "B", "v": 0}]], "o": [{"v": 0}, {"v": 1}]},
+            {"m": "B", "e": [[{"m": "A", "v": 0}]], "o": [{"v": 0}, {"v": 1}]},
+        ],
+        "c": [["A", "B"]],
+    }
+
+
+@pytest.mark.parametrize(
+    "data, expected",
+    [
+        (
+            {
+                "ms": [
+                    {"m": "A", "e": [], "o": [{"v": 0}, {"v": 1}]},
+                ],
+                "c": [["A"]],
+            },
+            {frozenset()},
+        ),
+        (
+            {
+                "ms": [
+                    {"m": "A", "e": [], "o": [{"v": 0}, {"v": 1}]},
+                    {"m": "B", "e": [[{"m": "A", "v": 0}]], "o": [{"v": 0}, {"v": 1}]},
+                ],
+                "c": [["A", "B"]],
+            },
+            {frozenset({("A", 0)})},
+        ),
+    ],
+)
+def test_consistent_closures_for_roots_and_single_step(data, expected):
+    closures = compute_transitive_closures(data, consistent=True)
+    assert closures["A"] == {frozenset()}
+    if "B" in closures:
+        assert closures["B"] == expected
+
+
+def test_consistent_closure_propagates_transitively(simple_data):
+    closures = compute_transitive_closures(simple_data, consistent=True)
+    assert closures["C"] == {frozenset({("A", 0), ("B", 1)})}
+
+
+def test_consistent_closure_keeps_multiple_distinct_branches(branching_data):
+    closures = compute_transitive_closures(branching_data, consistent=True)
+    assert closures["B"] == {frozenset({("A", 0)}), frozenset({("A", 1)})}
+    assert closures["C"] == {
+        frozenset({("A", 1)}),
+        frozenset({("A", 1), ("B", 1)}),
+        frozenset({("A", 0), ("B", 1)}),
+    }
+
+
+def test_consistent_closure_drops_conflicting_merge(conflict_chain_data):
+    closures = compute_transitive_closures(conflict_chain_data, consistent=True)
+    # the branch through B contributes A=0, but the direct A=1 in D conflicts with that
+    assert closures["D"] == set()
+
+
+def test_inconsistent_closure_keeps_conflicting_events(conflict_chain_data):
+    closures = compute_transitive_closures(conflict_chain_data, consistent=False)
+    assert closures["D"] == {frozenset({("A", 0), ("B", 1), ("A", 1)})}
+
+
+def test_cycle_detection_raises(cycle_data):
+    with pytest.raises(ValueError, match="Cycle detected in enabling relations at"):
+        compute_transitive_closures(cycle_data, consistent=True)
+
+
+def test_inconsistent_mode_preserves_all_events_in_branches():
+    data = {
+        "ms": [
+            {"m": "A", "e": [], "o": [{"v": 0}, {"v": 1}]},
+            {
+                "m": "B",
+                "e": [[{"m": "A", "v": 0}], [{"m": "A", "v": 1}]],
+                "o": [{"v": 0}, {"v": 1}],
+            },
+            {"m": "C", "e": [[{"m": "B", "v": 1}]], "o": [{"v": 0}, {"v": 1}]},
+        ],
+        "c": [["A", "B", "C"]],
+    }
+    closures = compute_transitive_closures(data, consistent=False)
+    assert closures["B"] == {frozenset({("A", 0)}), frozenset({("A", 1)})}
+    assert closures["C"] == {
+        frozenset({("A", 0), ("B", 1)}),
+        frozenset({("A", 1), ("B", 1)}),
+    }
+
+
+def test_compute_transitive_closures_consistent_skips_incompatible_ancestor_merge():
+    data = {
+        "ms": [
+            {"m": "A", "e": [], "o": [{"v": 0}, {"v": 1}]},
+            {"m": "B", "e": [[{"m": "A", "v": 0}]], "o": [{"v": 0}, {"v": 1}]},
+            {"m": "C", "e": [[{"m": "A", "v": 1}]], "o": [{"v": 0}, {"v": 1}]},
+            {
+                "m": "D",
+                "e": [[{"m": "B", "v": 1}, {"m": "C", "v": 1}]],
+                "o": [{"v": 0}, {"v": 1}],
+            },
+        ],
+        "c": [["A", "B", "C", "D"]],
+    }
+
+    closures = compute_transitive_closures(data, consistent=True)
+
+    assert closures["A"] == {frozenset()}
+    assert closures["B"] == {frozenset({("A", 0)})}
+    assert closures["C"] == {frozenset({("A", 1)})}
+    assert closures["D"] == set()
+
+
+def test_compute_transitive_closures_consistent_skips_direct_event_conflict():
+    data = {
+        "ms": [
+            {"m": "A", "e": [], "o": [{"v": 0}, {"v": 1}]},
+            {
+                "m": "B",
+                "e": [[{"m": "A", "v": 0}, {"m": "A", "v": 1}]],
+                "o": [{"v": 0}, {"v": 1}],
+            },
+        ],
+        "c": [["A", "B"]],
+    }
+
+    closures = compute_transitive_closures(data, consistent=True)
+
+    assert closures["A"] == {frozenset()}
+    assert closures["B"] == set()
+
+
+def test_topological_orders_returns_empty_tuple_for_empty_input():
+    """Yield the empty linearization for an empty dependency graph."""
+    orders = list(_topological_orders([], {}))
+    assert orders == [()]
+
+
+def test_topological_orders_returns_single_chain_order():
+    """Return exactly one order for a strict chain."""
+    nodes = ["A", "B", "C"]
+    parents = {
+        "A": set(),
+        "B": {"A"},
+        "C": {"B"},
+    }
+
+    orders = list(_topological_orders(nodes, parents))
+    assert orders == [("A", "B", "C")]
+
+
+def test_topological_orders_returns_all_branching_orders():
+    """Enumerate every legal order for a branching DAG."""
+    nodes = ["A", "B", "C"]
+    parents = {
+        "A": set(),
+        "B": {"A"},
+        "C": {"A"},
+    }
+
+    orders = list(_topological_orders(nodes, parents))
+    assert orders == [("A", "B", "C"), ("A", "C", "B")]
+
+
+def test_topological_orders_sorts_available_nodes_deterministically():
+    """Choose the lexicographically smallest available node first."""
+    nodes = ["C", "B", "A"]
+    parents = {node: set() for node in nodes}
+
+    orders = list(_topological_orders(nodes, parents))
+    assert orders[0] == ("A", "B", "C")
+    assert len(orders) == 6
+    assert ("C", "B", "A") in orders
+
+
+def test_topological_orders_yields_nothing_for_cycle():
+    """Return no linearization when the dependency graph has a cycle."""
+    nodes = ["A", "B"]
+    parents = {
+        "A": {"B"},
+        "B": {"A"},
+    }
+
+    orders = list(_topological_orders(nodes, parents))
+    assert orders == []
