@@ -17,6 +17,105 @@ import numpy as np
 from quantum_experiment_structures.data.integer_sequences import DEDEKIND_NUMBERS
 
 
+def compute_transitive_closures(data, consistent=True):
+    """Compute transitive closures of all enabling relations in a CCS.
+
+    Args:
+        data: A CCS-like dictionary containing at least the key "ms". Each
+            measurement in data["ms"] must be a mapping with keys:
+            - "m": measurement name (str)
+            - "e": list of enabling relations, where each enabling relation is a
+              list of event dicts with keys "m" and "v".
+        consistent: A bool indicating if the computation should produce transitive closures that
+            only contain consistent sets of events.
+
+    Returns:
+        A dictionary mapping each measurement name to the set of all distinct
+        transitively closed enabling sets for that measurement. Each enabling
+        set is represented as a frozenset of (measurement_name, value) tuples.
+
+    Raises:
+        KeyError: If a referenced measurement is missing from data["ms"].
+        ValueError: If a cycle is detected in the enabling graph.
+    """
+    measurements = {m["m"]: m for m in data["ms"]}
+
+    seen = dict()
+    visiting = set()
+
+    def merge_compatible(a, b):
+        """Merge two event sets if they are consistent, else return None."""
+        merged = dict(a)
+        for m, v in b:
+            if m in merged and merged[m] != v:
+                return None
+            merged[m] = v
+        return frozenset(merged.items())
+
+    def close_measurement(name):
+        """Return all transitive closures for one measurement."""
+        if name in seen:
+            return seen[name]
+        if name in visiting:
+            raise ValueError(f"Cycle detected in enabling relations at {name!r}.")
+
+        visiting.add(name)
+        try:
+            measurement = measurements[name]
+            enabling_relations = measurement["e"]
+
+            # root measurements are enabled by the empty set
+            if not enabling_relations:
+                result = set([frozenset()])
+                seen[name] = result
+                return result
+
+            result = set()
+
+            for relation in enabling_relations:
+                # start with the empty closure for this relation, then expand event by event
+                partial_closures = set([frozenset()])
+
+                for event in relation:
+                    parent = event["m"]
+                    value = event["v"]
+
+                    parent_closures = close_measurement(parent)
+                    next_partials = set()
+
+                    for partial in partial_closures:
+                        for parent_closure in parent_closures:
+                            if consistent:
+                                merged = merge_compatible(partial, parent_closure)
+                                if merged is None:
+                                    continue
+
+                                # add the direct enabling event itself
+                                expanded = dict(merged)
+                                if parent in expanded and expanded[parent] != value:
+                                    continue
+                                expanded[parent] = value
+                                next_partials.add(frozenset(expanded.items()))
+                            else:
+                                merged = set(partial)
+                                merged.update(parent_closure)
+                                merged.add((parent, value))
+                                next_partials.add(frozenset(merged))
+
+                    partial_closures = next_partials
+                    if not partial_closures and consistent:
+                        break
+
+                result.update(partial_closures)
+
+            seen[name] = result
+            return result
+        finally:
+            visiting.remove(name)
+
+    return {name: close_measurement(name) for name in measurements}
+
+
 def compute_mappings_for_extensive_game(extensive_game):
     """Parse an extensive form game tree and compute iset to nodes and player to iset mappings.
 

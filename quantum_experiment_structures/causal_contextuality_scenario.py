@@ -7,6 +7,7 @@ import inspect
 import json
 from pathlib import Path
 
+from quantum_experiment_structures.utils import utils
 from quantum_experiment_structures.data.schemas import CCS_SCHEMA
 import jsonschema
 
@@ -339,6 +340,146 @@ class CausalContextualityScenario:
             if value not in measurements_to_outcomes[measurement]:
                 return False
         return True
+
+    def _relation_transitive_closures(self, relation, closures_by_measurement):
+        """Compute all transitive closures for one enabling relation."""
+        partial_closures = set([frozenset()])
+
+        for event in relation:
+            parent, value = event["m"], event["v"]
+            next_partials = set()
+
+            for partial in partial_closures:
+                for parent_closure in closures_by_measurement[parent]:
+                    merged = dict(partial)
+                    compatible = True
+
+                    for m, v in parent_closure:
+                        if m in merged and merged[m] != v:
+                            compatible = False
+                            break
+                        merged[m] = v
+
+                    if not compatible:
+                        continue
+
+                    if parent in merged and merged[parent] != value:
+                        continue
+
+                    merged[parent] = value
+                    next_partials.add(frozenset(merged.items()))
+
+            partial_closures = next_partials
+            if not partial_closures:
+                break
+
+        return partial_closures
+
+    def _check_all_enabling_relations_reachable(self):
+        """Return True iff every enabling relation is reachable in some facet.
+
+        A relation is considered reachable if at least one of its transitive closures
+        has support contained in some facet of the cover.
+        """
+        closures_by_measurement = utils.compute_transitive_closures(self.data, consistent=True)
+
+        for measurement in self.data["ms"]:
+            name = measurement["m"]
+
+            for relation in measurement["e"]:
+                relation_closures = self._relation_transitive_closures(
+                    relation,
+                    closures_by_measurement,
+                )
+
+                relation_reachable = False
+                for closure in relation_closures:
+                    support = set([name])
+                    support.update(event[0] for event in closure)
+
+                    if any(support <= facet for facet in self.cover):
+                        relation_reachable = True
+                        break
+
+                if not relation_reachable:
+                    return False
+
+        return True
+
+    def _check_facet_measurements_reachable(self):
+        """Return True iff every measurement in every facet is reachable there.
+
+        For each facet, we check that each measurement in that facet appears in at
+        least one complete history supported by that facet.
+        """
+        closures_by_measurement = utils.compute_transitive_closures(self.data, consistent=True)
+
+        for facet in self.cover:
+            for measurement in facet:
+                reachable = False
+                for closure in closures_by_measurement[measurement]:
+                    support = set([measurement])
+                    support.update(event[0] for event in closure)
+
+                    if support <= facet:
+                        reachable = True
+                        break
+
+                if not reachable:
+                    return False
+
+        return True
+
+    def _check_transitively_closed_enabling_relations(self):
+        """Return True iff every enabling relation is already transitively closed."""
+        closures_by_measurement = utils.compute_transitive_closures(self.data, consistent=True)
+
+        for measurement in self.data["ms"]:
+            name = measurement["m"]
+
+            if measurement["e"]:
+                actual_relations = set(
+                    frozenset((event["m"], event["v"]) for event in relation)
+                    for relation in measurement["e"]
+                )
+            else:
+                actual_relations = set([frozenset()])
+
+            if actual_relations != closures_by_measurement[name]:
+                return False
+
+        return True
+
+    def transitively_close_enabling_relations(self):
+        """Replace every enabling relation by its transitive closure in place."""
+        closures_by_measurement = utils.compute_transitive_closures(self.data, consistent=True)
+
+        for measurement in self.data["ms"]:
+            name = measurement["m"]
+
+            closed_relations = []
+            for closure in sorted(
+                closures_by_measurement[name],
+                key=lambda rel: (len(rel), tuple(sorted(rel))),
+            ):
+                closed_relation = [{"m": m, "v": v} for m, v in sorted(closure)]
+                if closed_relation:
+                    closed_relations.append(closed_relation)
+
+            measurement["e"] = closed_relations
+
+        self.measurements = {measurement["m"]: measurement for measurement in self.data["ms"]}
+        if "h" in self.data:
+            self.add_human_readable()
+        return self
+
+    def is_scenario_clean(self):
+        """Return True iff the scenario satisfies all three cleanliness criteria."""
+        return (
+            self._check_all_enabling_relations_reachable()
+            and self._check_facet_measurements_reachable()
+            and self._check_transitively_closed_enabling_relations()
+        )
 
     def sort_data(self):
         """Sort the cover, contexts and measurement lexicographically w.r.t. measurement names."""
