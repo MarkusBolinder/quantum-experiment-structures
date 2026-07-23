@@ -732,6 +732,11 @@ class CCSGenerator:
             # this means that we can simply assign target's enabling relations to alt_list
             enabled_by[target] = alt_list
 
+        # force the enabling relations to be a minimal antichain
+        enabled_by = {
+            measurement: utils.minimal_antichain_enabling_relations(enabling_relation)
+            for measurement, enabling_relation in enabled_by.items()
+        }
         return enabled_by
 
     def sample_measurements_and_outcomes(self):
@@ -979,6 +984,7 @@ class CCSGenerator:
 
         # 2) compute transitive closures of required events
         # closure_req[m] = dict(enabler_measurement -> required_value)
+        # TODO: replace this part with a call to the function in utils
         closure_req = dict()
         visiting = set()
 

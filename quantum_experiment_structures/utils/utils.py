@@ -17,6 +17,48 @@ import numpy as np
 from quantum_experiment_structures.data.integer_sequences import DEDEKIND_NUMBERS
 
 
+def minimal_antichain_enabling_relations(enabling_relations):
+    """Return the subset-minimal enabling relations as an antichain.
+
+    Each enabling relation is represented as a list of event dicts like
+    {"m": "A", "v": 0}.
+
+    If one relation is a strict subset of another, only the smaller relation is kept.
+    Duplicate relations are removed as well.
+
+    Args:
+        enabling_relations: The raw enabling relations for a single measurement.
+
+    Returns:
+        A list of enabling relations forming a minimal antichain, sorted
+        deterministically by size and then lexicographically.
+    """
+    if not enabling_relations:
+        return []
+
+    unique_relations = {
+        frozenset((event["m"], event["v"]) for event in relation)
+        for relation in enabling_relations
+        if relation
+    }
+
+    minimal_relations = []
+    for rel in unique_relations:
+        is_minimal = True
+        for other in unique_relations:
+            if other is rel:
+                continue
+            if other < rel:
+                is_minimal = False
+                break
+        if is_minimal:
+            minimal_relations.append(rel)
+
+    minimal_relations.sort(key=lambda rel: (len(rel), tuple(sorted(rel))))
+
+    return [[{"m": m, "v": v} for m, v in sorted(relation)] for relation in minimal_relations]
+
+
 def compute_transitive_closures(data, consistent=True):
     """Compute transitive closures of all enabling relations in a CCS.
 
