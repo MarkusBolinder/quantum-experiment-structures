@@ -486,20 +486,16 @@ class CausalContextualityScenario:
             and self._check_transitively_closed_enabling_relations()
         )
 
+    # NOTE: excel because of the spreadsheet like naming convention
     @staticmethod
     def _excel_name(index):
-        """Return the canonical measurement name for a zero-based index.
-
-        Note:
-            This assumes that the scenario has 26 or fewer measurements.
-        """
+        """Return the canonical measurement name for a zero-based index."""
         if index < 0:
             raise ValueError("index must be non-negative")
 
         name = []
         index += 1
         while index > 0:
-            # TODO: handle arbitrarily many measurements
             index, rem = divmod(index - 1, 26)
             name.append(chr(ord("A") + rem))
         return "".join(reversed(name))

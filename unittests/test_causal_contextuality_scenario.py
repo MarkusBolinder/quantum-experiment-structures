@@ -2,6 +2,7 @@
 
 from collections import defaultdict
 from copy import deepcopy
+from types import SimpleNamespace
 from unittest.mock import patch
 
 import jsonschema
@@ -13,6 +14,7 @@ from quantum_experiment_structures.causal_contextuality_scenario import (
     StableCausalContextualityScenario,
 )
 from quantum_experiment_structures.spacetime_game import AlternatingSpacetimeGame
+from quantum_experiment_structures.utils import utils
 
 
 def _base_valid_ccs_data():
@@ -1034,3 +1036,742 @@ def test_to_spacetime_game_rejects_missing_root_local_cover():
 
     with pytest.raises(ValueError, match="No root local cover"):
         ccs.to_spacetime_game()
+
+
+@pytest.fixture
+def clean_scenario_data():
+    return {
+        "ms": [
+            {"m": "A", "e": [], "o": [{"v": 0}, {"v": 1}]},
+            {"m": "B", "e": [[{"m": "A", "v": 0}]], "o": [{"v": 0}, {"v": 1}]},
+            {"m": "C", "e": [[{"m": "A", "v": 1}]], "o": [{"v": 0}, {"v": 1}]},
+        ],
+        "c": [["A", "B"], ["A", "C"]],
+    }
+
+
+@pytest.fixture
+def dirty_inconsistent_only_data():
+    return {
+        "ms": [
+            {"m": "A", "e": [], "o": [{"v": 0}, {"v": 1}]},
+            {
+                "m": "B",
+                "e": [[{"m": "A", "v": 0}, {"m": "A", "v": 1}]],
+                "o": [{"v": 0}, {"v": 1}],
+            },
+        ],
+        "c": [["A", "B"]],
+    }
+
+
+@pytest.fixture
+def dirty_facet_overlap_data():
+    return {
+        "ms": [
+            {"m": "A", "e": [], "o": [{"v": 0}, {"v": 1}]},
+            {"m": "B", "e": [[{"m": "A", "v": 0}]], "o": [{"v": 0}, {"v": 1}]},
+            {"m": "C", "e": [[{"m": "B", "v": 1}]], "o": [{"v": 0}, {"v": 1}]},
+        ],
+        # C's closure is {A, B} but no facet contains both
+        "c": [["A", "B"], ["A", "C"]],
+    }
+
+
+@pytest.fixture
+def clean_closures_ccs_data():
+    """Build a CCS where all cleanliness checks pass."""
+    return {
+        "ms": [
+            {"m": "A", "e": [], "o": [{"v": 0}, {"v": 1}]},
+            {"m": "B", "e": [[{"m": "A", "v": 0}]], "o": [{"v": 0}, {"v": 1}]},
+            {"m": "C", "e": [[{"m": "A", "v": 1}]], "o": [{"v": 0}, {"v": 1}]},
+        ],
+        "c": [["A", "B"], ["A", "C"]],
+    }
+
+
+@pytest.fixture
+def dirty_unreachable_relation_data():
+    """Build a CCS with one unreachable enabling relation but reachable measurements."""
+    return {
+        "ms": [
+            {"m": "A", "e": [], "o": [{"v": 0}, {"v": 1}]},
+            {"m": "B", "e": [], "o": [{"v": 0}, {"v": 1}]},
+            {
+                "m": "C",
+                "e": [
+                    [{"m": "A", "v": 0}],
+                    [{"m": "B", "v": 0}],
+                    [{"m": "A", "v": 0}, {"m": "B", "v": 0}],
+                ],
+                "o": [{"v": 0}, {"v": 1}],
+            },
+        ],
+        "c": [["A", "C"], ["B", "C"]],
+    }
+
+
+@pytest.fixture
+def dirty_facet_unreachable_measurement_data():
+    """Build a CCS with a facet that cannot realize all of its measurements."""
+    return {
+        "ms": [
+            {"m": "A", "e": [], "o": [{"v": 0}, {"v": 1}]},
+            {"m": "B", "e": [], "o": [{"v": 0}, {"v": 1}]},
+            {"m": "C", "e": [[{"m": "B", "v": 0}]], "o": [{"v": 0}, {"v": 1}]},
+            {
+                "m": "D",
+                "e": [[{"m": "C", "v": 1}], [{"m": "A", "v": 1}, {"m": "B", "v": 0}]],
+                "o": [{"v": 0}, {"v": 1}],
+            },
+        ],
+        "c": [["A", "B", "D"], ["A", "C", "D"], ["B", "C", "D"]],
+    }
+
+
+@pytest.fixture
+def dirty_not_transitively_closed_data():
+    """Build a CCS whose enabling relations are not transitively closed."""
+    return {
+        "ms": [
+            {"m": "A", "e": [], "o": [{"v": 0}, {"v": 1}]},
+            {"m": "B", "e": [[{"m": "A", "v": 0}]], "o": [{"v": 0}, {"v": 1}]},
+            {"m": "C", "e": [[{"m": "B", "v": 0}]], "o": [{"v": 0}, {"v": 1}]},
+        ],
+        "c": [["A", "B", "C"]],
+    }
+
+
+@pytest.fixture
+def helper_conflict_data():
+    """Build a CCS whose relation closure becomes inconsistent."""
+    return {
+        "ms": [
+            {"m": "A", "e": [], "o": [{"v": 0}, {"v": 1}]},
+            {"m": "B", "e": [[{"m": "A", "v": 0}]], "o": [{"v": 0}, {"v": 1}]},
+            {"m": "C", "e": [[{"m": "A", "v": 1}]], "o": [{"v": 0}, {"v": 1}]},
+            {"m": "D", "e": [[{"m": "B", "v": 0}, {"m": "C", "v": 0}]], "o": [{"v": 0}, {"v": 1}]},
+        ],
+        "c": [["A", "B", "C", "D"]],
+    }
+
+
+def test_relation_transitive_closures_returns_empty_for_root_measurement(clean_closures_ccs_data):
+    """Return the empty closure for a root relation."""
+    ccs = CausalContextualityScenario(deepcopy(clean_closures_ccs_data))
+    closures_by_measurement = utils.compute_transitive_closures(ccs.data, consistent=True)
+
+    assert ccs._relation_transitive_closures([], closures_by_measurement) == {frozenset()}
+
+
+def test_relation_transitive_closures_returns_empty_on_conflict(helper_conflict_data):
+    """Drop an impossible relation closure."""
+    ccs = CausalContextualityScenario(deepcopy(helper_conflict_data))
+    closures_by_measurement = utils.compute_transitive_closures(ccs.data, consistent=True)
+
+    relation = [{"m": "B", "v": 0}, {"m": "C", "v": 0}]
+    assert ccs._relation_transitive_closures(relation, closures_by_measurement) == set()
+
+
+def test_check_all_enabling_relations_reachable_passes_on_clean_data(clean_closures_ccs_data):
+    """Accept a scenario whose every enabling relation is reachable."""
+    ccs = CausalContextualityScenario(deepcopy(clean_closures_ccs_data))
+    assert ccs._check_all_enabling_relations_reachable() is True
+
+
+def test_check_all_enabling_relations_reachable_fails_on_unreachable_relation(
+    dirty_unreachable_relation_data,
+):
+    """Reject a scenario with an unreachable enabling relation."""
+    ccs = CausalContextualityScenario(deepcopy(dirty_unreachable_relation_data))
+    assert ccs._check_all_enabling_relations_reachable() is False
+
+
+def test_check_facet_measurements_reachable_passes_on_clean_data(clean_closures_ccs_data):
+    """Accept a scenario whose every facet can realize all of its measurements."""
+    ccs = CausalContextualityScenario(deepcopy(clean_closures_ccs_data))
+    assert ccs._check_facet_measurements_reachable() is True
+
+
+def test_check_facet_measurements_reachable_fails_on_dirty_facet(
+    dirty_facet_unreachable_measurement_data,
+):
+    """Reject a facet that cannot realize all of its measurements."""
+    ccs = CausalContextualityScenario(deepcopy(dirty_facet_unreachable_measurement_data))
+    assert ccs._check_facet_measurements_reachable() is False
+
+
+def test_check_transitively_closed_enabling_relations_passes_on_closed_data(
+    clean_closures_ccs_data,
+):
+    """Accept already transitively closed enabling relations."""
+    ccs = CausalContextualityScenario(deepcopy(clean_closures_ccs_data))
+    assert ccs._check_transitively_closed_enabling_relations() is True
+
+
+def test_check_transitively_closed_enabling_relations_fails_on_open_data(
+    dirty_not_transitively_closed_data,
+):
+    """Reject enabling relations that are not transitively closed."""
+    ccs = CausalContextualityScenario(deepcopy(dirty_not_transitively_closed_data))
+    assert ccs._check_transitively_closed_enabling_relations() is False
+
+
+def test_transitively_close_enabling_relations_closes_in_place(dirty_not_transitively_closed_data):
+    """Close enabling relations transitively in place."""
+    ccs = CausalContextualityScenario(deepcopy(dirty_not_transitively_closed_data))
+    returned = ccs.transitively_close_enabling_relations()
+
+    assert returned is ccs
+    assert ccs._check_transitively_closed_enabling_relations() is True
+    assert ccs.data["ms"][0]["e"] == []
+    assert ccs.data["ms"][1]["e"] == [[{"m": "A", "v": 0}]]
+    assert ccs.data["ms"][2]["e"] == [[{"m": "A", "v": 0}, {"m": "B", "v": 0}]]
+
+
+def test_transitively_close_enabling_relations_handles_multiple_branches():
+    """Close multiple enabling branches consistently."""
+    data = {
+        "ms": [
+            {"m": "A", "e": [], "o": [{"v": 0}, {"v": 1}]},
+            {
+                "m": "B",
+                "e": [[{"m": "A", "v": 0}], [{"m": "A", "v": 1}]],
+                "o": [{"v": 0}, {"v": 1}],
+            },
+            {"m": "C", "e": [[{"m": "B", "v": 1}]], "o": [{"v": 0}, {"v": 1}]},
+        ],
+        "c": [["A", "B", "C"]],
+    }
+    ccs = CausalContextualityScenario(deepcopy(data))
+
+    ccs.transitively_close_enabling_relations()
+
+    assert ccs.data["ms"][1]["e"] == [[{"m": "A", "v": 0}], [{"m": "A", "v": 1}]]
+    assert ccs.data["ms"][2]["e"] == [
+        [{"m": "A", "v": 0}, {"m": "B", "v": 1}],
+        [{"m": "A", "v": 1}, {"m": "B", "v": 1}],
+    ]
+
+
+def test_is_scenario_clean_passes_on_clean_data(clean_closures_ccs_data):
+    """Accept a scenario that satisfies all cleanliness criteria."""
+    ccs = CausalContextualityScenario(deepcopy(clean_closures_ccs_data))
+    assert ccs.is_scenario_clean() is True
+
+
+def test_is_scenario_clean_fails_on_unreachable_relation(dirty_unreachable_relation_data):
+    """Reject a scenario with an unreachable relation."""
+    ccs = CausalContextualityScenario(deepcopy(dirty_unreachable_relation_data))
+    assert ccs.is_scenario_clean() is False
+
+
+def test_is_scenario_clean_fails_on_dirty_facet(dirty_facet_unreachable_measurement_data):
+    """Reject a scenario with an unreachable measurement inside a facet."""
+    ccs = CausalContextualityScenario(deepcopy(dirty_facet_unreachable_measurement_data))
+    assert ccs.is_scenario_clean() is False
+
+
+def test_is_scenario_clean_fails_on_open_enabling_relations(dirty_not_transitively_closed_data):
+    """Reject a scenario whose enabling relations are not transitively closed."""
+    ccs = CausalContextualityScenario(deepcopy(dirty_not_transitively_closed_data))
+    assert ccs.is_scenario_clean() is False
+
+
+@pytest.fixture
+def equivalent_ccs_data_by_a_root():
+    """Build a CCS whose child is enabled by the first root measurement."""
+    return {
+        "ms": [
+            {
+                "m": "A",
+                "e": [],
+                "o": [{"v": 0}, {"v": 1}],
+                "c": [["A", "B"]],
+            },
+            {
+                "m": "B",
+                "e": [],
+                "o": [{"v": 0}, {"v": 1}],
+            },
+            {
+                "m": "C",
+                "e": [[{"m": "A", "v": 0}]],
+                "o": [{"v": 0}, {"v": 1}],
+                "c": [["A", "C"]],
+            },
+        ],
+        "c": [["A", "B"], ["A", "C"]],
+    }
+
+
+@pytest.fixture
+def equivalent_ccs_data_by_b_root():
+    """Build a CCS equivalent to the A-root scenario up to relabeling."""
+    return {
+        "ms": [
+            {
+                "m": "X",
+                "e": [],
+                "o": [{"v": 0}, {"v": 1}],
+                "c": [["X", "Y"]],
+            },
+            {
+                "m": "Y",
+                "e": [],
+                "o": [{"v": 0}, {"v": 1}],
+            },
+            {
+                "m": "Z",
+                "e": [[{"m": "X", "v": 0}]],
+                "o": [{"v": 0}, {"v": 1}],
+                "c": [["X", "Z"]],
+            },
+        ],
+        "c": [["X", "Y"], ["X", "Z"]],
+    }
+
+
+@pytest.fixture
+def non_equivalent_two_bridge_data():
+    """Build a CCS whose child has two distinct enabling relations."""
+    return {
+        "ms": [
+            {"m": "A", "e": [], "o": [{"v": 0}, {"v": 1}]},
+            {"m": "B", "e": [], "o": [{"v": 0}, {"v": 1}]},
+            {
+                "m": "C",
+                "e": [[{"m": "A", "v": 0}], [{"m": "B", "v": 0}]],
+                "o": [{"v": 0}, {"v": 1}],
+            },
+        ],
+        "c": [["A", "B", "C"]],
+    }
+
+
+@pytest.fixture
+def dirty_not_transitively_closed_canonical_data():
+    """Build a CCS whose enabling relations need transitive closure."""
+    return {
+        "ms": [
+            {"m": "A", "e": [], "o": [{"v": 0}, {"v": 1}]},
+            {"m": "B", "e": [[{"m": "A", "v": 0}]], "o": [{"v": 0}, {"v": 1}]},
+            {"m": "C", "e": [[{"m": "B", "v": 0}]], "o": [{"v": 0}, {"v": 1}]},
+        ],
+        "c": [["A", "B", "C"]],
+        "h": {"ms": "stale", "o": "stale", "e": "stale", "c": "stale"},
+    }
+
+
+@pytest.mark.parametrize(
+    ("index", "expected"),
+    [
+        (0, "A"),
+        (1, "B"),
+        (25, "Z"),
+        (26, "AA"),
+        (27, "AB"),
+    ],
+)
+def test_excel_name_covers_single_and_multi_letter_indices(index, expected):
+    """Convert zero-based indices into canonical measurement names."""
+    assert CausalContextualityScenario._excel_name(index) == expected
+
+
+def test_excel_name_rejects_negative_indices():
+    """Reject negative indices when creating canonical measurement names."""
+    with pytest.raises(ValueError, match="index must be non-negative"):
+        CausalContextualityScenario._excel_name(-1)
+
+
+def test_canonical_signature_sorts_relations_within_measurement():
+    """Serialize one measurement's enabling relations in a deterministic order."""
+    data = {
+        "ms": [
+            {"m": "A", "e": [], "o": [{"v": 0}, {"v": 1}]},
+            {"m": "B", "e": [], "o": [{"v": 0}, {"v": 1}]},
+            {
+                "m": "C",
+                "e": [[{"m": "B", "v": 0}], [{"m": "A", "v": 1}]],
+                "o": [{"v": 0}, {"v": 1}],
+            },
+        ],
+        "c": [["A", "B", "C"]],
+    }
+    ccs = CausalContextualityScenario(deepcopy(data))
+
+    signature = ccs._canonical_signature_for_order(["A", "B", "C"])
+
+    assert signature == (
+        tuple(),
+        tuple(),
+        ((("A", 1),), (("B", 0),)),
+    )
+
+
+def test_apply_measurement_renaming_relabels_measurements_cover_and_local_contexts():
+    """Rewrite a scenario in place under a canonical measurement renaming."""
+    data = {
+        "ms": [
+            {
+                "m": "A",
+                "e": [],
+                "o": [{"v": 0}, {"v": 1}],
+                "c": [["A", "B"]],
+            },
+            {
+                "m": "B",
+                "e": [],
+                "o": [{"v": 0}, {"v": 1}],
+            },
+            {
+                "m": "C",
+                "e": [[{"m": "A", "v": 0}]],
+                "o": [{"v": 0}, {"v": 1}],
+                "c": [["A", "C"]],
+            },
+        ],
+        "c": [["A", "B"], ["A", "C"]],
+    }
+    ccs = CausalContextualityScenario(deepcopy(data))
+
+    ccs._apply_measurement_renaming(["B", "A", "C"])
+
+    assert [measurement["m"] for measurement in ccs.data["ms"]] == ["A", "B", "C"]
+    assert ccs.data["ms"][0]["e"] == []
+    assert ccs.data["ms"][1]["c"] == [["A", "B"]]
+    assert ccs.data["ms"][2]["e"] == [[{"m": "B", "v": 0}]]
+    assert ccs.data["ms"][2]["c"] == [["B", "C"]]
+    assert ccs.data["c"] == [["A", "B"], ["B", "C"]]
+    assert ccs.cover == {frozenset({"A", "B"}), frozenset({"B", "C"})}
+    assert ccs.measurements["B"]["m"] == "B"
+
+
+def test_canonicalize_enabling_equivalence_maps_equivalent_structures_to_same_form(
+    equivalent_ccs_data_by_a_root,
+    equivalent_ccs_data_by_b_root,
+    monkeypatch,
+):
+    """Collapse two relabeled but physically equivalent scenarios to the same canonical form."""
+
+    def fake_topological_orders(nodes, parents):
+        """Yield the two legal linearizations for a two-root one-child graph."""
+        yield ("A", "B", "C") if "A" in nodes else ("X", "Y", "Z")
+        yield ("B", "A", "C") if "A" in nodes else ("Y", "X", "Z")
+
+    monkeypatch.setattr(utils, "_topological_orders", fake_topological_orders)
+
+    ccs_a = CausalContextualityScenario(deepcopy(equivalent_ccs_data_by_a_root))
+    ccs_b = CausalContextualityScenario(deepcopy(equivalent_ccs_data_by_b_root))
+
+    returned_a = ccs_a.canonicalize_enabling_equivalence()
+    returned_b = ccs_b.canonicalize_enabling_equivalence()
+
+    assert returned_a is ccs_a
+    assert returned_b is ccs_b
+    assert ccs_a.data == ccs_b.data
+    assert [measurement["m"] for measurement in ccs_a.data["ms"]] == ["A", "B", "C"]
+    assert ccs_a.data["ms"][2]["e"] == [[{"m": "A", "v": 0}]]
+
+
+def test_canonicalize_enabling_equivalence_distinguishes_non_equivalent_structures(
+    equivalent_ccs_data_by_a_root,
+    non_equivalent_two_bridge_data,
+    monkeypatch,
+):
+    """Keep scenarios with different enabling structure in different equivalence classes."""
+
+    def fake_topological_orders(nodes, parents):
+        """Yield the two legal linearizations for a two-root one-child graph."""
+        yield ("A", "B", "C")
+        yield ("B", "A", "C")
+
+    monkeypatch.setattr(utils, "_topological_orders", fake_topological_orders)
+
+    ccs_equiv = CausalContextualityScenario(deepcopy(equivalent_ccs_data_by_a_root))
+    ccs_non_equiv = CausalContextualityScenario(deepcopy(non_equivalent_two_bridge_data))
+
+    ccs_equiv.canonicalize_enabling_equivalence()
+    ccs_non_equiv.canonicalize_enabling_equivalence()
+
+    assert ccs_equiv.data != ccs_non_equiv.data
+    assert len(ccs_equiv.data["ms"][2]["e"]) == 1
+    assert len(ccs_non_equiv.data["ms"][2]["e"]) == 2
+
+
+def test_canonicalize_enabling_equivalence_closes_transitively_and_refreshes_human_readable(
+    dirty_not_transitively_closed_canonical_data,
+    monkeypatch,
+):
+    """Close the scenario transitively and recompute the human-readable representation."""
+
+    def fake_topological_orders(nodes, parents):
+        """Yield a single linearization for the closed chain."""
+        yield tuple(sorted(nodes))
+
+    monkeypatch.setattr(utils, "_topological_orders", fake_topological_orders)
+
+    ccs = CausalContextualityScenario(deepcopy(dirty_not_transitively_closed_canonical_data))
+    assert ccs._check_transitively_closed_enabling_relations() is False
+
+    ccs.canonicalize_enabling_equivalence(ensure_transitively_closed=True)
+
+    assert ccs._check_transitively_closed_enabling_relations() is True
+    assert ccs.data["h"]["ms"] == "{A, B, C}"
+    assert "(A,0)" in ccs.data["h"]["e"]
+    assert "(B,0)" in ccs.data["h"]["e"]
+
+
+def test_canonicalize_enabling_equivalence_skips_closure_when_not_requested(
+    equivalent_ccs_data_by_a_root,
+    monkeypatch,
+):
+    """Leave an already closed scenario untouched when closure is disabled."""
+
+    def fake_topological_orders(nodes, parents):
+        """Yield the only legal linearization for the test scenario."""
+        yield ("A", "B", "C")
+
+    monkeypatch.setattr(utils, "_topological_orders", fake_topological_orders)
+
+    ccs = CausalContextualityScenario(deepcopy(equivalent_ccs_data_by_a_root))
+    monkeypatch.setattr(
+        ccs,
+        "transitively_close_enabling_relations",
+        lambda: pytest.fail("closure should not be called"),
+    )
+
+    ccs.canonicalize_enabling_equivalence(ensure_transitively_closed=False)
+
+    assert ccs.data["ms"][2]["e"] == [[{"m": "A", "v": 0}]]
+
+
+def test_canonicalize_enabling_equivalence_raises_when_no_legal_orders(
+    equivalent_ccs_data_by_a_root,
+    monkeypatch,
+):
+    """Reject scenarios that do not admit any legal measurement order."""
+    monkeypatch.setattr(utils, "_topological_orders", lambda _nodes, _parents: iter(()))
+
+    ccs = CausalContextualityScenario(deepcopy(equivalent_ccs_data_by_a_root))
+
+    with pytest.raises(ValueError, match="No valid topological order exists for this scenario"):
+        ccs.canonicalize_enabling_equivalence()
+
+
+def _empty_ccs_data():
+    """Build a minimal CCS instance with one flat measurement."""
+    return {
+        "ms": [
+            {
+                "m": "A",
+                "e": [],
+                "o": [{"v": 0}, {"v": 1}],
+            }
+        ],
+        "c": [["A"]],
+    }
+
+
+def _branching_ccs_data():
+    """Build a CCS instance with a genuine branching dependency graph."""
+    return {
+        "ms": [
+            {
+                "m": "A",
+                "e": [],
+                "o": [{"v": 0}, {"v": 1}],
+            },
+            {
+                "m": "B",
+                "e": [[{"m": "A", "v": 0}]],
+                "o": [{"v": 0}, {"v": 1}],
+            },
+            {
+                "m": "C",
+                "e": [[{"m": "A", "v": 1}]],
+                "o": [{"v": 0}, {"v": 1}],
+            },
+        ],
+        "c": [["A", "B", "C"]],
+    }
+
+
+def _self_reference_ccs_data():
+    """Build a CCS instance whose enabling graph contains a self-reference."""
+    return {
+        "ms": [
+            {
+                "m": "A",
+                "e": [],
+                "o": [{"v": 0}, {"v": 1}],
+            },
+            {
+                "m": "B",
+                "e": [[{"m": "B", "v": 0}, {"m": "A", "v": 0}]],
+                "o": [{"v": 0}, {"v": 1}],
+            },
+        ],
+        "c": [["A", "B"]],
+        "h": {
+            "ms": "{A, B}",
+            "o": "O_A = {0, 1}, O_B = {0, 1}",
+            "e": "∅ ⊢ A, {(B,0),(A,0)} ⊢ B",
+            "c": "{{A, B}}",
+        },
+    }
+
+
+def test_relation_transitive_closures_skips_conflicting_parent_value():
+    """Drop partial closures that would assign incompatible values to a parent."""
+    ccs = CausalContextualityScenario(_empty_ccs_data())
+    relation = [{"m": "A", "v": 0}, {"m": "A", "v": 1}]
+    closures_by_measurement = {"A": {frozenset()}}
+
+    result = ccs._relation_transitive_closures(relation, closures_by_measurement)
+    assert result == set()
+
+
+def test_relation_transitive_closures_builds_expected_closure():
+    """Combine compatible parent closures into a closure set."""
+    ccs = CausalContextualityScenario(_branching_ccs_data())
+    relation = [{"m": "A", "v": 0}, {"m": "B", "v": 1}]
+    closures_by_measurement = {
+        "A": {frozenset()},
+        "B": {frozenset({("A", 0)})},
+    }
+
+    result = ccs._relation_transitive_closures(relation, closures_by_measurement)
+    assert result == {frozenset({("A", 0), ("B", 1)})}
+
+
+def test_check_all_enabling_relations_reachable_returns_true(monkeypatch):
+    """Accept a relation whose support fits inside a facet."""
+    data = {
+        "ms": [
+            {"m": "A", "e": [], "o": [{"v": 0}, {"v": 1}]},
+            {"m": "B", "e": [[{"m": "A", "v": 0}]], "o": [{"v": 0}, {"v": 1}]},
+        ],
+        "c": [["A", "B"]],
+    }
+    ccs = CausalContextualityScenario(data)
+
+    monkeypatch.setattr(
+        utils,
+        "compute_transitive_closures",
+        lambda data, consistent=True: {
+            "A": {frozenset()},
+            "B": {frozenset({("A", 0)})},
+        },
+    )
+
+    assert ccs._check_all_enabling_relations_reachable() is True
+
+
+def test_check_all_enabling_relations_reachable_returns_false(monkeypatch):
+    """Reject a relation whose support does not fit inside any facet."""
+    data = {
+        "ms": [
+            {"m": "A", "e": [], "o": [{"v": 0}, {"v": 1}]},
+            {"m": "B", "e": [[{"m": "A", "v": 0}]], "o": [{"v": 0}, {"v": 1}]},
+        ],
+        "c": [["A"]],
+    }
+    ccs = CausalContextualityScenario(data)
+
+    monkeypatch.setattr(
+        utils,
+        "compute_transitive_closures",
+        lambda data, consistent=True: {
+            "A": {frozenset()},
+            "B": {frozenset({("A", 0)})},
+        },
+    )
+
+    assert ccs._check_all_enabling_relations_reachable() is False
+
+
+def test_canonicalize_enabling_equivalence_ignores_self_reference():
+    """Canonicalize a scenario whose dependency graph contains a self-reference."""
+    ccs = CausalContextualityScenario(deepcopy(_self_reference_ccs_data()))
+
+    ccs.canonicalize_enabling_equivalence(ensure_transitively_closed=False)
+
+    assert [measurement["m"] for measurement in ccs.data["ms"]] == ["A", "B"]
+    assert ccs.data["c"] == [["A", "B"]]
+    assert ccs.data["ms"][1]["e"] == [[{"m": "A", "v": 0}, {"m": "B", "v": 0}]]
+
+
+def test_canonicalize_enabling_equivalence_recomputes_human_readable_when_closed(monkeypatch):
+    """Close the scenario first and rebuild the human-readable representation."""
+    data = _empty_ccs_data()
+    data["h"] = {
+        "ms": "{A}",
+        "o": "O_A = {0, 1}",
+        "e": "∅ ⊢ A",
+        "c": "{{A}}",
+    }
+    ccs = CausalContextualityScenario(deepcopy(data))
+
+    calls = {"closed": 0, "human": 0}
+
+    def fake_closed(self):
+        """Count transitive-closure calls."""
+        calls["closed"] += 1
+        return self
+
+    def fake_human(self):
+        """Count human-readable rebuilds."""
+        calls["human"] += 1
+        return None
+
+    monkeypatch.setattr(
+        CausalContextualityScenario,
+        "_check_transitively_closed_enabling_relations",
+        lambda self: False,
+    )
+    monkeypatch.setattr(
+        CausalContextualityScenario,
+        "transitively_close_enabling_relations",
+        fake_closed,
+    )
+    monkeypatch.setattr(
+        CausalContextualityScenario,
+        "add_human_readable",
+        fake_human,
+    )
+
+    ccs.canonicalize_enabling_equivalence(ensure_transitively_closed=True)
+
+    assert calls["closed"] == 1
+    assert calls["human"] == 1
+    assert ccs.data["ms"][0]["m"] == "A"
+
+
+def test_canonicalize_enabling_equivalence_skips_closure_when_already_closed(monkeypatch):
+    """Leave already closed scenarios untouched before canonicalization."""
+    ccs = CausalContextualityScenario(deepcopy(_empty_ccs_data()))
+
+    calls = {"closed": 0}
+
+    def fake_closed(self):
+        """Count transitive-closure calls."""
+        calls["closed"] += 1
+        return self
+
+    monkeypatch.setattr(
+        CausalContextualityScenario,
+        "_check_transitively_closed_enabling_relations",
+        lambda self: True,
+    )
+    monkeypatch.setattr(
+        CausalContextualityScenario,
+        "transitively_close_enabling_relations",
+        fake_closed,
+    )
+
+    ccs.canonicalize_enabling_equivalence(ensure_transitively_closed=True)
+
+    assert calls["closed"] == 0
+    assert [measurement["m"] for measurement in ccs.data["ms"]] == ["A"]
