@@ -1,7 +1,10 @@
-import copy
+"""End-to-end validation and summarization of CCS datasets."""
+
+from dataclasses import asdict, dataclass
+import html
+import itertools
 import json
 import os
-from dataclasses import asdict, dataclass
 from pathlib import Path
 
 import matplotlib
@@ -11,27 +14,23 @@ matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 import pandas as pd
 import pytest
-from pyspark.sql import DataFrame, SparkSession, functions as F
-from pyspark.sql.types import ArrayType, StructType
-
+from pyspark.sql import SparkSession, functions as F
+from pyspark.sql.types import StructType
+import quantum_experiment_structures as qes
 from quantum_experiment_structures.utils import spark_utils
-from quantum_experiment_structures.causal_contextuality_scenario import (
-    CausallySecuredScenario,
-    StableCausalContextualityScenario,
-)
-from quantum_experiment_structures.spacetime_game import AlternatingSpacetimeGame
 
-DATA_ROOT = Path(os.environ.get("QES_DATA_ROOT", "e2e_tests/data"))
-ARTIFACT_ROOT = Path(os.environ.get("QES_E2E_ARTIFACT_ROOT", "e2e_tests/generated/e2e"))
-
-SPARK_CCS_SCHEMA = StructType.fromJson(
-    json.load(Path("quantum_experiment_structures/data/spark_ccs_schema.json").open())
+PACKAGE_ROOT = Path(qes.__file__).resolve().parent.parent
+DATA_ROOT = Path(os.environ.get("QES_DATA_ROOT", PACKAGE_ROOT / "e2e_tests/data"))
+ARTIFACT_ROOT = Path(
+    os.environ.get("QES_E2E_ARTIFACT_ROOT", PACKAGE_ROOT / "e2e_tests/generated/e2e")
 )
 
-EXPECTED_COUNTS = {
-    ("complete", "base"): {1: 1, 2: 8, 3: 1692, 4: 341518920},
-    ("complete", "causally_secured"): {1: 1, 2: 4, 3: 45, 4: 1276},
-}
+with (PACKAGE_ROOT / "quantum_experiment_structures" / "data" / "spark_ccs_schema.json").open(
+    "r"
+) as f:
+    SPARK_CCS_SCHEMA = StructType.fromJson(json.load(f))
+
+DATA_EXTENSIONS = {".jsonl", ".parquet"}
 
 
 @dataclass(frozen=True)
@@ -43,45 +42,200 @@ class DatasetMetadata:
     distinct_rows: int
     valid_rows: int
     stable_rows: int
-    causally_secured_rows: int
-    stable_rows_becoming_causally_secured_after_deduplication: int
+    clean_rows: int
+    flat_rows: int
+    unique_causal_bridges_rows: int
+    causally_secured_cover_rows: int
 
 
 @pytest.fixture(scope="session")
 def spark():
     """Create a local Spark session for ensemble tests."""
-    spark = (
-        SparkSession.builder.master("local[*]")
+    num_cpus = os.environ.get("SLURM_CPUS_PER_TASK", "*")
+    session = (
+        SparkSession.builder.master(f"local[{num_cpus}]")
         .appName("E2E QES Tests")
         .config("spark.sql.shuffle.partitions", "16")
         .getOrCreate()
     )
-    yield spark
-    spark.stop()
+    yield session
+    session.stop()
 
 
-def _dataset_path(category, kind, n_variables=None):
-    """Build the path for one dataset directory."""
-    if n_variables is None:
-        return DATA_ROOT / category / kind
-    return DATA_ROOT / category / kind / str(n_variables)
+def _html_link(path, text=None):
+    """Return a relative HTML link tag."""
+    text = path.name if text is None else text
+    return f'<a href="{html.escape(path.as_posix())}">{html.escape(text)}</a>'
 
 
-def _leaf_dataset_dirs(root):
-    """Yield every directory under `root` that contains JSONL files."""
+def _write_dataset_html(dataset_dir, metadata_row, histogram_dir, out_root):
+    """Write a simple static HTML report for one dataset."""
+    out_root = Path(out_root)
+    html_root = out_root / "html"
+    html_root.mkdir(parents=True, exist_ok=True)
+
+    dataset_rel = Path(metadata_row.dataset)
+    page_dir = html_root / dataset_rel
+    page_dir.mkdir(parents=True, exist_ok=True)
+
+    # collect PNGs for the page
+    pngs = sorted(histogram_dir.glob("*.png"))
+
+    rows = [
+        "<!doctype html>",
+        "<html>",
+        "<head>",
+        f"<title>{html.escape(metadata_row.dataset)}</title>",
+        "<meta charset='utf-8' />",
+        "<style>",
+        "body { font-family: sans-serif; margin: 2rem; }",
+        "table { border-collapse: collapse; }",
+        "td, th { border: 1px solid #ccc; padding: 0.4rem 0.7rem; }",
+        "img { max-width: 100%; height: auto; border: 1px solid #ddd; margin-bottom: 1rem; }",
+        ".grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(420px, 1fr)); gap: 1rem; }",
+        "</style>",
+        "</head>",
+        "<body>",
+        f"<h1>{html.escape(metadata_row.dataset)}</h1>",
+        "<h2>Metadata</h2>",
+        "<table>",
+    ]
+
+    for key, value in asdict(metadata_row).items():
+        rows.append(f"<tr><th>{html.escape(str(key))}</th><td>{html.escape(str(value))}</td></tr>")
+
+    rows += ["</table>", "<h2>Histograms</h2>", "<div class='grid'>"]
+    for png in pngs:
+        img_path = png.as_posix()
+        rows.append(
+            "<figure>"
+            f"<img src='{html.escape(img_path)}' alt='{html.escape(png.stem)}' />"
+            f"<figcaption>{html.escape(png.stem)}</figcaption>"
+            "</figure>"
+        )
+    rows += ["</div>", "</body>", "</html>"]
+
+    page_path = page_dir / "index.html"
+    page_path.write_text("\n".join(rows), encoding="utf-8")
+    return page_path
+
+
+def _write_results_index_html(metadata_rows, out_root):
+    """Write a top-level HTML index for all dataset reports."""
+    out_root = Path(out_root)
+    html_root = out_root / "html"
+    html_root.mkdir(parents=True, exist_ok=True)
+
+    rows = [
+        "<!doctype html>",
+        "<html>",
+        "<head>",
+        "<title>CCS dataset validation results</title>",
+        "<meta charset='utf-8' />",
+        "<style>",
+        "body { font-family: sans-serif; margin: 2rem; }",
+        "table { border-collapse: collapse; }",
+        "td, th { border: 1px solid #ccc; padding: 0.4rem 0.7rem; }",
+        "</style>",
+        "</head>",
+        "<body>",
+        "<h1>CCS dataset validation results</h1>",
+        "<table>",
+        "<tr><th>Dataset</th><th>Total</th><th>Distinct</th><th>Valid</th><th>Stable</th><th>Clean</th><th>Flat</th><th>Unique bridges</th><th>Secured cover</th></tr>",
+    ]
+
+    for row in sorted(metadata_rows, key=lambda r: r.dataset):
+        page = Path("html") / Path(row.dataset) / "index.html"
+        rows.append(
+            "<tr>"
+            f"<td>{_html_link(page, row.dataset)}</td>"
+            f"<td>{row.total_rows}</td>"
+            f"<td>{row.distinct_rows}</td>"
+            f"<td>{row.valid_rows}</td>"
+            f"<td>{row.stable_rows}</td>"
+            f"<td>{row.clean_rows}</td>"
+            f"<td>{row.flat_rows}</td>"
+            f"<td>{row.unique_causal_bridges_rows}</td>"
+            f"<td>{row.causally_secured_cover_rows}</td>"
+            "</tr>"
+        )
+
+    rows += ["</table>", "</body>", "</html>"]
+    (html_root / "index.html").write_text("\n".join(rows), encoding="utf-8")
+
+
+def _dataset_leaf_dirs(root):
+    """Return the leaf dataset directories under 'root'."""
+    root = Path(root)
     if not root.exists():
         return []
 
+    candidates = []
     for dirpath, _, filenames in os.walk(root):
-        if any(name.endswith(".jsonl") for name in filenames):
-            yield Path(dirpath)
+        path = Path(dirpath)
+        if any(
+            Path(name).suffix in DATA_EXTENSIONS and not name.startswith("_") for name in filenames
+        ):
+            candidates.append(path)
+
+    return [
+        path
+        for path in sorted(candidates)
+        if not any(path in other.parents for other in candidates if other != path)
+    ]
 
 
-def _load_jsonl_dir(spark, path):
-    """Load all JSONL files in a directory as a Spark DataFrame."""
-    files = sorted(path.rglob("*.jsonl"))
-    assert files, f"No JSONL files found under {path}"
-    return spark.read.json([str(file_path) for file_path in files], schema=SPARK_CCS_SCHEMA)
+def _dataset_label(path):
+    """Return a stable label for one dataset directory."""
+    return path.relative_to(DATA_ROOT).as_posix()
+
+
+def _load_dataset_dir(spark, path):
+    """Load all data files in a dataset directory as a Spark DataFrame."""
+    path = Path(path)
+    files = sorted(
+        file_path
+        for file_path in path.rglob("*")
+        if file_path.is_file()
+        and file_path.suffix in DATA_EXTENSIONS
+        and not file_path.name.startswith("_")
+    )
+    assert files, f"No JSONL or parquet files found under {path}"
+
+    suffixes = {file_path.suffix for file_path in files}
+    assert len(suffixes) == 1, f"Mixed file formats are not supported under {path}"
+
+    if ".jsonl" in suffixes:
+        return spark.read.schema(SPARK_CCS_SCHEMA).json([str(file_path) for file_path in files])
+
+    return spark.read.parquet(*[str(file_path) for file_path in files])
+
+
+def _scenario_histogram_frames(df):
+    """Return per-scenario metric frames for histogramming."""
+    scenario_df = df.withColumn("_sid", F.monotonically_increasing_id())
+
+    scalars = scenario_df.select(
+        "_sid",
+        F.size("ms").alias("n_measurements"),
+        F.size("c").alias("n_contexts_in_cover"),
+    )
+
+    measurements_in_context = scenario_df.select(
+        "_sid", F.explode_outer("c").alias("context")
+    ).select("_sid", F.size("context").alias("n_measurements_in_context"))
+
+    enabling_sets_per_measurement = scenario_df.select(
+        "_sid", F.explode_outer("ms").alias("m")
+    ).select("_sid", F.size("m.e").alias("n_enabling_sets"))
+
+    events_per_enabling_set = (
+        scenario_df.select("_sid", F.explode_outer("ms").alias("m"))
+        .select("_sid", F.explode_outer("m.e").alias("e"))
+        .select("_sid", F.size("e").alias("n_events_in_enabling_set"))
+    )
+
+    return scalars, measurements_in_context, enabling_sets_per_measurement, events_per_enabling_set
 
 
 def _canonical_count(df):
@@ -90,65 +244,52 @@ def _canonical_count(df):
     return canonical.distinct().count()
 
 
-def _valid_rows(df, secured):
-    """Validate rows with the existing Spark-based validator."""
-    validated = df.rdd.mapPartitions(lambda rows: spark_utils._validate_partition(rows, secured))
-    return validated.filter(lambda x: x["valid"]).map(lambda x: x["record"]).toDF(df.schema)
+def _metadata_for_leaf_dataset(df, label):
+    """Compute the aggregate metadata for one leaf dataset directory."""
+    total_rows = df.count()
+    distinct_rows = _canonical_count(df)
 
+    if total_rows:
+        per_record = (
+            df.rdd.map(lambda row: row.asDict(recursive=True))
+            .map(spark_utils.record_metadata)
+            .reduce(lambda left, right: {key: left[key] + right[key] for key in left})
+        )
+    else:
+        per_record = {
+            "valid_rows": 0,
+            "stable_rows": 0,
+            "clean_rows": 0,
+            "flat_rows": 0,
+            "unique_causal_bridges_rows": 0,
+            "causally_secured_cover_rows": 0,
+        }
 
-def _measurement_df(df):
-    """Flatten the `ms` array so that measurement-level metrics can be aggregated."""
-    return df.select(F.explode_outer(F.col("ms")).alias("m"))
-
-
-def _relation_df(df):
-    """Flatten enabling relations so relation sizes can be aggregated."""
-    return (
-        df.select(F.explode_outer(F.col("ms")).alias("m"))
-        .where(F.col("m.e").isNotNull())
-        .select(F.explode(F.col("m.e")).alias("e"))
+    return DatasetMetadata(
+        dataset=label,
+        total_rows=total_rows,
+        distinct_rows=distinct_rows,
+        valid_rows=per_record["valid_rows"],
+        stable_rows=per_record["stable_rows"],
+        clean_rows=per_record["clean_rows"],
+        flat_rows=per_record["flat_rows"],
+        unique_causal_bridges_rows=per_record["unique_causal_bridges_rows"],
+        causally_secured_cover_rows=per_record["causally_secured_cover_rows"],
     )
-    return df.select(F.explode_outer(F.col("ms")).alias("m")).select(
-        F.explode_outer(F.col("m.e")).alias("e")
-    )
-
-
-def _cover_df(df):
-    """Flatten the top-level cover so context sizes can be aggregated."""
-    return df.select(F.explode_outer(F.col("c")).alias("context"))
-
-
-def _maybe_size_expr(array_col):
-    """Return a size expression that tolerates missing optional arrays."""
-    return F.when(F.col(array_col).isNotNull(), F.size(F.col(array_col)))
-
-
-def _grouped_distribution(df, value_col):
-    """Return a tiny grouped distribution as a pandas frame."""
-    grouped = df.groupBy(value_col).count().orderBy(value_col).toPandas()
-    grouped[value_col] = grouped[value_col].astype(int)
-    grouped["count"] = grouped["count"].astype(int)
-    return grouped
-
-
-def _write_distribution_plot(values, value_col, out_path, title):
-    """Write a simple histogram/bar plot from a grouped Spark result."""
-    out_path.parent.mkdir(parents=True, exist_ok=True)
-    plt.figure(figsize=(10, 6))
-    plt.bar(values[value_col], values["count"])
-    plt.title(title)
-    plt.xlabel(value_col)
-    plt.ylabel("count")
-    plt.tight_layout()
-    plt.savefig(out_path, dpi=200)
-    plt.close()
 
 
 def _write_histogram(series, out_path, title, xlabel):
     """Write a histogram for already-collected scalar values."""
     out_path.parent.mkdir(parents=True, exist_ok=True)
+
+    if series.dropna().empty:
+        return
+
+    bins = (series.max() - series.min() + 1).astype(int)
     plt.figure(figsize=(10, 6))
-    plt.hist(series.to_numpy(), bins="auto")
+    plt.hist(series.to_numpy(), bins=bins, edgecolor="black", linewidth=0.8)
+    plt.grid(True, axis="y", alpha=0.3, linestyle="--")
+    plt.gca().set_axisbelow(True)
     plt.title(title)
     plt.xlabel(xlabel)
     plt.ylabel("count")
@@ -157,301 +298,88 @@ def _write_histogram(series, out_path, title, xlabel):
     plt.close()
 
 
-def _metadata_for_leaf_dataset(spark, path):
-    """Compute the aggregate metadata for one leaf dataset directory."""
-    df = _load_jsonl_dir(spark, path)
-    total_rows = df.count()
-    distinct_rows = _canonical_count(df)
-    valid_rows = _valid_rows(df, secured=("causally_secured" in path.as_posix())).count()
+def _write_histogram_2d(x_values, y_values, out_path, title, xlabel, ylabel):
+    """Write a 2D histogram for one metric pair."""
+    out_path.parent.mkdir(parents=True, exist_ok=True)
 
-    # Heavy checks stay distributed in Spark; we only count the records that satisfy the criteria.
-    stable_rdd = df.rdd.map(lambda row: row.asDict(recursive=True)).filter(
-        lambda record: spark_utils._record_is_stable(record)
-    )
-    stable_rows = stable_rdd.count()
+    frame = pd.DataFrame({xlabel: x_values, ylabel: y_values}).dropna()
+    if frame.empty:
+        return
 
-    causally_secured_rdd = df.rdd.map(lambda row: row.asDict(recursive=True)).filter(
-        lambda record: spark_utils._record_is_causally_secured(record)
-    )
-    causally_secured_rows = causally_secured_rdd.count()
-
-    # this hangs if it is not possible to deduplicate I guess, but even when done on only stable
-    stable_becomes_secured = stable_rdd.filter(
-        lambda record: spark_utils._record_becomes_causally_secured_after_deduplication(record)
-    ).count()
-    stable_becomes_secured_rows = (
-        df.rdd.map(lambda row: row.asDict(recursive=True))
-        .map(
-            lambda record: (
-                1
-                if spark_utils._record_is_stable(record)
-                and spark_utils._record_becomes_causally_secured_after_deduplication(record)
-                else 0
-            )
-        )
-        .sum()
-    )
-    print(f"{stable_becomes_secured=}, {stable_becomes_secured_rows=}")
-
-    return DatasetMetadata(
-        dataset=str(path.relative_to(DATA_ROOT)),
-        total_rows=total_rows,
-        distinct_rows=distinct_rows,
-        valid_rows=valid_rows,
-        stable_rows=stable_rows,
-        causally_secured_rows=causally_secured_rows,
-        stable_rows_becoming_causally_secured_after_deduplication=stable_becomes_secured_rows,
-    )
+    bins = (frame.max(axis=0) - frame.min(axis=0) + 1).to_numpy().astype(int)
+    plt.figure(figsize=(10, 6))
+    plt.hist2d(frame[xlabel].to_numpy(), frame[ylabel].to_numpy(), bins=bins)
+    plt.colorbar(label="count")
+    plt.grid(True, alpha=0.3, linestyle="--")
+    plt.gca().set_axisbelow(True)
+    plt.title(title)
+    plt.xlabel(xlabel)
+    plt.ylabel(ylabel)
+    plt.tight_layout()
+    plt.savefig(out_path, dpi=200)
+    plt.close()
 
 
-@pytest.mark.parametrize(
-    "category,kind,secured,complete",
-    [
-        ("complete", "base", False, True),
-        ("complete", "causally_secured", True, True),
-        ("sampled", "base", False, False),
-        ("sampled", "causally_secured", True, False),
-    ],
-)
-def test_dataset_directories_are_valid_and_unique(spark, category, kind, secured, complete):
-    """Validate each dataset directory end to end."""
-    base_path = _dataset_path(category, kind)
-    assert base_path.exists(), f"Missing dataset directory: {base_path}"
-
-    expected = EXPECTED_COUNTS.get((category, kind))
-
-    # complete datasets are split by number of variables in subdirectories like complete/base/1/
-    if complete:
-        assert isinstance(expected, dict), f"Set EXPECTED_COUNTS[{(category, kind)!r}] to a dict"
-        variable_dirs = sorted(path for path in base_path.iterdir() if path.is_dir())
-        assert variable_dirs, f"No variable subdirectories found under {base_path}"
-
-        for var_dir in variable_dirs:
-            n_variables = int(var_dir.name)
-            df = _load_jsonl_dir(spark, var_dir)
-
-            total = df.count()
-            distinct_total = _canonical_count(df)
-            assert total == distinct_total, f"Duplicate entries found in {var_dir}"
-
-            assert n_variables in expected, f"Missing expected count for {var_dir}"
-            assert total == expected[n_variables], (
-                f"Unexpected number of complete scenarios in {var_dir}"
-            )
-
-            valid_df = _valid_rows(df, secured)
-            assert valid_df.count() == total
-
-    # sampled datasets are just read from the category/kind directory directly
-    else:
-        df = _load_jsonl_dir(spark, base_path)
-
-        total = df.count()
-
-        # TODO: should we force some level of not duplicates, e.g. at least 90% has to be distinct?
-        # distinct_total = _canonical_count(df)
-        # assert total == distinct_total, f"Duplicate entries found in {base_path}"
-
-        valid_df = _valid_rows(df, secured)
-        assert valid_df.count() == total
-
-
-@pytest.mark.parametrize(
-    "category,kind",
-    [
-        ("sampled", "base"),
-        ("sampled", "causally_secured"),
-    ],
-)
-def test_sampled_histograms_are_written(spark, category, kind, tmp_path=ARTIFACT_ROOT):
-    """Write distribution plots for sampled datasets only."""
-    base_path = _dataset_path(category, kind)
-    assert base_path.exists(), f"Missing dataset directory: {base_path}"
-
-    out_root = Path(os.environ.get("QES_E2E_ARTIFACT_ROOT", tmp_path / "e2e_artifacts"))
-    histogram_root = out_root / "histograms"
-
-    leaf_dirs = list(_leaf_dataset_dirs(base_path))
-    assert leaf_dirs, f"No JSONL leaf directories found under {base_path}"
-
-    for leaf_dir in leaf_dirs:
-        df = _load_jsonl_dir(spark, leaf_dir)
-        rel_leaf = leaf_dir.relative_to(DATA_ROOT).as_posix()
-
-        # dataset scalars
-        summary = pd.DataFrame(
-            {
-                "n_measurements": df.select(F.size(F.col("ms")).alias("n_measurements"))
-                .toPandas()["n_measurements"]
-                .astype(int),
-                "n_contexts_in_cover": df.select(F.size(F.col("c")).alias("n_contexts_in_cover"))
-                .toPandas()["n_contexts_in_cover"]
-                .astype(int),
-            }
-        )
-        _write_histogram(
-            summary["n_measurements"],
-            histogram_root / f"{rel_leaf}__n_measurements.png",
-            title=f"{rel_leaf} — number of measurements",
-            xlabel="number of measurements",
-        )
-        _write_histogram(
-            summary["n_contexts_in_cover"],
-            histogram_root / f"{rel_leaf}__n_contexts_in_cover.png",
-            title=f"{rel_leaf} — number of contexts in cover",
-            xlabel="number of contexts in cover",
-        )
-
-        # measurement distributions
-        measurement_df = _measurement_df(df)
-        measurement_sizes = measurement_df.select(
-            F.size(F.col("m.o")).alias("n_outcomes"),
-            F.coalesce(F.size(F.col("m.e")), F.lit(0)).alias("n_enabling_relations"),
-            F.when(F.col("m.c").isNotNull(), F.size(F.col("m.c")))
-            .otherwise(F.lit(0))
-            .alias("n_local_contexts"),
-        )
-
-        _write_distribution_plot(
-            _grouped_distribution(measurement_sizes.select("n_outcomes"), "n_outcomes"),
-            "n_outcomes",
-            histogram_root / f"{rel_leaf}__n_outcomes.png",
-            title=f"{rel_leaf} — outcomes per measurement",
-        )
-        _write_distribution_plot(
-            _grouped_distribution(
-                measurement_sizes.select("n_enabling_relations"), "n_enabling_relations"
-            ),
-            "n_enabling_relations",
-            histogram_root / f"{rel_leaf}__n_enabling_relations.png",
-            title=f"{rel_leaf} — enabling relations per measurement",
-        )
-
-        local_contexts = measurement_sizes.select("n_local_contexts").where(
-            F.col("n_local_contexts").isNotNull()
-        )
-        if local_contexts.count() > 0:
-            _write_distribution_plot(
-                _grouped_distribution(local_contexts, "n_local_contexts"),
-                "n_local_contexts",
-                histogram_root / f"{rel_leaf}__n_local_contexts.png",
-                title=f"{rel_leaf} — local contexts per measurement",
-            )
-
-        # enabling relation sizes
-        relation_sizes = _relation_df(df).select(F.size(F.col("e")).alias("n_enabled_by"))
-        _write_distribution_plot(
-            _grouped_distribution(relation_sizes, "n_enabled_by"),
-            "n_enabled_by",
-            histogram_root / f"{rel_leaf}__n_enabled_by.png",
-            title=f"{rel_leaf} — size of enabling relations",
-        )
-
-        # cover context sizes
-        context_sizes = _cover_df(df).select(
-            F.size(F.col("context")).alias("n_measurements_in_context")
-        )
-        _write_distribution_plot(
-            _grouped_distribution(context_sizes, "n_measurements_in_context"),
-            "n_measurements_in_context",
-            histogram_root / f"{rel_leaf}__n_measurements_in_context.png",
-            title=f"{rel_leaf} — measurements per context",
-        )
-
-
-@pytest.mark.parametrize(
-    "category,kind",
-    [
-        ("complete", "base"),
-        ("complete", "causally_secured"),
-        ("sampled", "base"),  # this one hangs -- why? -- deduplication takes very long for large
-        ("sampled", "causally_secured"),
-    ],
-)
-def test_metadata_counts_are_written_for_all_datasets(
-    spark, category, kind, tmp_path=ARTIFACT_ROOT
-):
-    """Write the aggregate metadata for every dataset leaf."""
-    base_path = _dataset_path(category, kind)
-    assert base_path.exists(), f"Missing dataset directory: {base_path}"
-
-    out_root = Path(os.environ.get("QES_E2E_ARTIFACT_ROOT", tmp_path / "e2e_artifacts"))
+def _write_metadata_artifacts(metadata_rows, out_root):
+    """Persist metadata rows."""
+    out_root = Path(out_root)
     metadata_root = out_root / "metadata"
+    metadata_root.mkdir(parents=True, exist_ok=True)
 
-    leaf_dirs = list(_leaf_dataset_dirs(base_path))
-    assert leaf_dirs, f"No JSONL leaf directories found under {base_path}"
-
-    summaries = []
-    for leaf_dir in leaf_dirs:
-        summary = _metadata_for_leaf_dataset(spark, leaf_dir)
-        summaries.append(summary)
-
-        rel_leaf = leaf_dir.relative_to(DATA_ROOT).as_posix()
-        out_path = metadata_root / f"{rel_leaf}.json"
-        out_path.parent.mkdir(parents=True, exist_ok=True)
-        out_path.write_text(json.dumps(asdict(summary), indent=2, sort_keys=True))
-
-    index_path = out_root / "dataset_index.json"
-    index_path.write_text(
-        json.dumps([asdict(summary) for summary in summaries], indent=2, sort_keys=True)
-    )
-
-    assert index_path.exists()
-    assert any(metadata_root.rglob("*.json")), "No metadata JSON files were created"
+    metadata_pdf = pd.DataFrame([asdict(row) for row in metadata_rows]).sort_values("dataset")
+    metadata_pdf.to_csv(out_root / "dataset_summary.csv", index=False)
+    metadata_pdf.to_json(out_root / "dataset_summary.jsonl", orient="records", lines=True)
 
 
-@pytest.mark.parametrize(
-    "category,kind",
-    [
-        ("complete", "causally_secured"),
-        ("sampled", "causally_secured"),
-    ],
-)
-def test_causally_secured_datasets_convert_to_spacetime_and_extensive_games(spark, category, kind):
-    """Check the conversion chain CCS -> spacetime game -> extensive game."""
-    base_path = _dataset_path(category, kind)
-    assert base_path.exists(), f"Missing dataset directory: {base_path}"
-
-    leaf_dirs = list(_leaf_dataset_dirs(base_path))
-    assert leaf_dirs, f"No JSONL leaf directories found under {base_path}"
-
-    for leaf_dir in leaf_dirs:
-        df = _load_jsonl_dir(spark, leaf_dir)
-        for row in df.rdd.map(lambda row: row.asDict(recursive=True)).collect():
-            scenario = CausallySecuredScenario(copy.deepcopy(row))
-            assert scenario.all_checks()
-
-            spacetime_game = scenario.to_spacetime_game()
-            alternating = AlternatingSpacetimeGame(copy.deepcopy(spacetime_game))
-            assert alternating.all_checks()
-
-            extensive_game = alternating.to_extensive_game()
-            assert isinstance(extensive_game, dict)
+def _write_histogram_artifacts(histogram_rows, out_root):
+    """Persist histogram summaries."""
+    histogram_root = out_root / "histograms"
+    histogram_root.mkdir(parents=True, exist_ok=True)
+    for dataset, metrics in histogram_rows:
+        path = histogram_root / dataset
+        for metric, name in metrics:
+            out_path = path / f"{name}.png"
+            title = f"Distribution of {name} for {dataset}"
+            _write_histogram(metric, out_path, title, name)
+        for (left, left_name), (right, right_name) in itertools.combinations(metrics, 2):
+            out_path = path / f"{left_name}_vs_{right_name}.png"
+            title = f"Distribution of {left_name} vs. {right_name} for {dataset}"
+            _write_histogram_2d(left, right, out_path, title, left_name, right_name)
 
 
-@pytest.mark.parametrize(
-    "category,kind",
-    [
-        ("complete", "base"),
-        ("complete", "causally_secured"),
-        ("sampled", "base"),
-        ("sampled", "causally_secured"),
-    ],
-)
-def test_sampled_and_complete_datasets_can_be_summarized_by_spark(spark, category, kind):
-    """Sanity-check the aggregation pipeline used for metadata and histograms."""
-    base_path = _dataset_path(category, kind)
-    assert base_path.exists(), f"Missing dataset directory: {base_path}"
+@pytest.mark.parametrize("leaf_dir", _dataset_leaf_dirs(DATA_ROOT))
+def test_dataset_leaf_is_valid_and_summarized(spark, leaf_dir):
+    """Validate one dataset leaf directory and save its artifacts."""
+    metadata_row = None
+    try:
+        df = _load_dataset_dir(spark, leaf_dir)
+        label = _dataset_label(leaf_dir)
 
-    leaf_dirs = list(_leaf_dataset_dirs(base_path))
-    assert leaf_dirs, f"No JSONL leaf directories found under {base_path}"
+        metadata_row = _metadata_for_leaf_dataset(df, label)
 
-    for leaf_dir in leaf_dirs:
-        df = _load_jsonl_dir(spark, leaf_dir)
-        measurement_df = _measurement_df(df)
-        relation_df = _relation_df(df)
-        cover_df = _cover_df(df)
+        histogram_frames = [metric.toPandas() for metric in _scenario_histogram_frames(df)]
+        flattened_row = [
+            (metric_df[col], col)
+            for metric_df in histogram_frames
+            for col in metric_df.columns
+            if col != "_sid"
+        ]
 
-        assert measurement_df.count() >= 0
-        assert relation_df.count() >= 0
-        assert cover_df.count() >= 0
+        _write_metadata_artifacts([metadata_row], ARTIFACT_ROOT)
+        _write_histogram_artifacts([(label, flattened_row)], ARTIFACT_ROOT)
+        histogram_dir = ARTIFACT_ROOT / "histograms" / label
+        _write_dataset_html(leaf_dir, metadata_row, histogram_dir, ARTIFACT_ROOT)
+
+        assert metadata_row.total_rows >= 0
+        assert metadata_row.distinct_rows >= 0
+        assert metadata_row.distinct_rows <= metadata_row.total_rows
+        assert metadata_row.valid_rows <= metadata_row.total_rows
+        assert metadata_row.stable_rows <= metadata_row.total_rows
+        assert metadata_row.clean_rows <= metadata_row.total_rows
+        assert metadata_row.flat_rows <= metadata_row.total_rows
+        assert metadata_row.unique_causal_bridges_rows <= metadata_row.total_rows
+        assert metadata_row.causally_secured_cover_rows <= metadata_row.total_rows
+
+    finally:
+        if metadata_row is not None:
+            _write_results_index_html([metadata_row], ARTIFACT_ROOT)

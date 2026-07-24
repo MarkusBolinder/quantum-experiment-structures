@@ -112,3 +112,35 @@ def _record_becomes_causally_secured_after_deduplication(record):
     except Exception:
         is_secured = False
     return is_secured
+
+
+def _safe_check(fn):
+    """Return 'True' when 'fn' completes successfully and returns truthy."""
+    try:
+        return fn()
+    except Exception:
+        return False
+
+
+def record_metadata(record):
+    """Compute CCS metrics for one raw record."""
+    flat = all(not measurement["e"] for measurement in record["ms"])
+
+    valid = _safe_check(lambda: qes.CausalContextualityScenario(record).all_checks())
+    stable = _safe_check(lambda: qes.StableCausalContextualityScenario(record).check_stability())
+    clean = _safe_check(lambda: qes.CausalContextualityScenario(record).is_scenario_clean())
+    unique_causal_bridges = _safe_check(
+        lambda: qes.CausallySecuredScenario(record).check_unique_causal_bridges()
+    )
+    causally_secured_cover = _safe_check(
+        lambda: qes.CausallySecuredScenario(record).check_causally_secured_cover()
+    )
+
+    return {
+        "valid_rows": int(valid),
+        "stable_rows": int(stable),
+        "clean_rows": int(clean),
+        "flat_rows": int(flat),
+        "unique_causal_bridges_rows": int(unique_causal_bridges),
+        "causally_secured_cover_rows": int(causally_secured_cover),
+    }
