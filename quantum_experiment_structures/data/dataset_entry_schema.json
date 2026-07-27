@@ -1,0 +1,787 @@
+{
+    "fields": [
+        {
+            "metadata": {},
+            "name": "id",
+            "nullable": true,
+            "type": "long"
+        },
+        {
+            "metadata": {},
+            "name": "deduplicated_from",
+            "nullable": true,
+            "type": "long"
+        },
+        {
+            "metadata": {},
+            "name": "deduplicated_to",
+            "nullable": true,
+            "type": "long"
+        },
+        {
+            "metadata": {},
+            "name": "flat",
+            "nullable": true,
+            "type": "boolean"
+        },
+        {
+            "metadata": {},
+            "name": "clean",
+            "nullable": true,
+            "type": "boolean"
+        },
+        {
+            "metadata": {},
+            "name": "stable",
+            "nullable": true,
+            "type": "boolean"
+        },
+        {
+            "metadata": {},
+            "name": "unique_bridges",
+            "nullable": true,
+            "type": "boolean"
+        },
+        {
+            "metadata": {},
+            "name": "secured",
+            "nullable": true,
+            "type": "boolean"
+        },
+        {
+            "metadata": {},
+            "name": "ccs",
+            "nullable": true,
+            "type": {
+                "fields": [
+                    {
+                        "metadata": {},
+                        "name": "c",
+                        "nullable": true,
+                        "type": {
+                            "containsNull": true,
+                            "elementType": {
+                                "containsNull": true,
+                                "elementType": "string",
+                                "type": "array"
+                            },
+                            "type": "array"
+                        }
+                    },
+                    {
+                        "metadata": {},
+                        "name": "h",
+                        "nullable": true,
+                        "type": {
+                            "fields": [
+                                {
+                                    "metadata": {},
+                                    "name": "c",
+                                    "nullable": true,
+                                    "type": "string"
+                                },
+                                {
+                                    "metadata": {},
+                                    "name": "e",
+                                    "nullable": true,
+                                    "type": "string"
+                                },
+                                {
+                                    "metadata": {},
+                                    "name": "ms",
+                                    "nullable": true,
+                                    "type": "string"
+                                },
+                                {
+                                    "metadata": {},
+                                    "name": "o",
+                                    "nullable": true,
+                                    "type": "string"
+                                }
+                            ],
+                            "type": "struct"
+                        }
+                    },
+                    {
+                        "metadata": {},
+                        "name": "ms",
+                        "nullable": true,
+                        "type": {
+                            "containsNull": true,
+                            "elementType": {
+                                "fields": [
+                                    {
+                                        "metadata": {},
+                                        "name": "c",
+                                        "nullable": true,
+                                        "type": {
+                                            "containsNull": true,
+                                            "elementType": {
+                                                "containsNull": true,
+                                                "elementType": "string",
+                                                "type": "array"
+                                            },
+                                            "type": "array"
+                                        }
+                                    },
+                                    {
+                                        "metadata": {},
+                                        "name": "e",
+                                        "nullable": true,
+                                        "type": {
+                                            "containsNull": true,
+                                            "elementType": {
+                                                "containsNull": true,
+                                                "elementType": {
+                                                    "fields": [
+                                                        {
+                                                            "metadata": {},
+                                                            "name": "m",
+                                                            "nullable": true,
+                                                            "type": "string"
+                                                        },
+                                                        {
+                                                            "metadata": {},
+                                                            "name": "v",
+                                                            "nullable": true,
+                                                            "type": "long"
+                                                        }
+                                                    ],
+                                                    "type": "struct"
+                                                },
+                                                "type": "array"
+                                            },
+                                            "type": "array"
+                                        }
+                                    },
+                                    {
+                                        "metadata": {},
+                                        "name": "m",
+                                        "nullable": true,
+                                        "type": "string"
+                                    },
+                                    {
+                                        "metadata": {},
+                                        "name": "o",
+                                        "nullable": true,
+                                        "type": {
+                                            "containsNull": true,
+                                            "elementType": {
+                                                "fields": [
+                                                    {
+                                                        "metadata": {},
+                                                        "name": "l",
+                                                        "nullable": true,
+                                                        "type": "boolean"
+                                                    },
+                                                    {
+                                                        "metadata": {},
+                                                        "name": "v",
+                                                        "nullable": true,
+                                                        "type": "long"
+                                                    }
+                                                ],
+                                                "type": "struct"
+                                            },
+                                            "type": "array"
+                                        }
+                                    }
+                                ],
+                                "type": "struct"
+                            },
+                            "type": "array"
+                        }
+                    }
+                ],
+                "type": "struct"
+            }
+        },
+        {
+            "metadata": {},
+            "name": "ext",
+            "nullable": true,
+            "type": {
+                "fields": [
+                    {
+                        "metadata": {},
+                        "name": "Children",
+                        "nullable": true,
+                        "type": {
+                            "containsNull": true,
+                            "elementType": {
+                                "fields": [
+                                    {
+                                        "metadata": {},
+                                        "name": "Children",
+                                        "nullable": true,
+                                        "type": {
+                                            "containsNull": true,
+                                            "elementType": {
+                                                "fields": [
+                                                    {
+                                                        "metadata": {},
+                                                        "name": "Children",
+                                                        "nullable": true,
+                                                        "type": {
+                                                            "containsNull": true,
+                                                            "elementType": {
+                                                                "fields": [
+                                                                    {
+                                                                        "metadata": {},
+                                                                        "name": "Children",
+                                                                        "nullable": true,
+                                                                        "type": {
+                                                                            "containsNull": true,
+                                                                            "elementType": {
+                                                                                "fields": [
+                                                                                    {
+                                                                                        "metadata": {},
+                                                                                        "name": "Children",
+                                                                                        "nullable": true,
+                                                                                        "type": {
+                                                                                            "containsNull": true,
+                                                                                            "elementType": {
+                                                                                                "fields": [
+                                                                                                    {
+                                                                                                        "metadata": {},
+                                                                                                        "name": "Children",
+                                                                                                        "nullable": true,
+                                                                                                        "type": {
+                                                                                                            "containsNull": true,
+                                                                                                            "elementType": {
+                                                                                                                "fields": [
+                                                                                                                    {
+                                                                                                                        "metadata": {},
+                                                                                                                        "name": "Children",
+                                                                                                                        "nullable": true,
+                                                                                                                        "type": {
+                                                                                                                            "containsNull": true,
+                                                                                                                            "elementType": {
+                                                                                                                                "fields": [
+                                                                                                                                    {
+                                                                                                                                        "metadata": {},
+                                                                                                                                        "name": "Children",
+                                                                                                                                        "nullable": true,
+                                                                                                                                        "type": {
+                                                                                                                                            "containsNull": true,
+                                                                                                                                            "elementType": {
+                                                                                                                                                "fields": [
+                                                                                                                                                    {
+                                                                                                                                                        "metadata": {},
+                                                                                                                                                        "name": "kind",
+                                                                                                                                                        "nullable": true,
+                                                                                                                                                        "type": "string"
+                                                                                                                                                    },
+                                                                                                                                                    {
+                                                                                                                                                        "metadata": {},
+                                                                                                                                                        "name": "payoffs",
+                                                                                                                                                        "nullable": true,
+                                                                                                                                                        "type": {
+                                                                                                                                                            "containsNull": true,
+                                                                                                                                                            "elementType": "long",
+                                                                                                                                                            "type": "array"
+                                                                                                                                                        }
+                                                                                                                                                    }
+                                                                                                                                                ],
+                                                                                                                                                "type": "struct"
+                                                                                                                                            },
+                                                                                                                                            "type": "array"
+                                                                                                                                        }
+                                                                                                                                    },
+                                                                                                                                    {
+                                                                                                                                        "metadata": {},
+                                                                                                                                        "name": "information-set",
+                                                                                                                                        "nullable": true,
+                                                                                                                                        "type": "long"
+                                                                                                                                    },
+                                                                                                                                    {
+                                                                                                                                        "metadata": {},
+                                                                                                                                        "name": "kind",
+                                                                                                                                        "nullable": true,
+                                                                                                                                        "type": "string"
+                                                                                                                                    },
+                                                                                                                                    {
+                                                                                                                                        "metadata": {},
+                                                                                                                                        "name": "payoffs",
+                                                                                                                                        "nullable": true,
+                                                                                                                                        "type": {
+                                                                                                                                            "containsNull": true,
+                                                                                                                                            "elementType": "long",
+                                                                                                                                            "type": "array"
+                                                                                                                                        }
+                                                                                                                                    },
+                                                                                                                                    {
+                                                                                                                                        "metadata": {},
+                                                                                                                                        "name": "player",
+                                                                                                                                        "nullable": true,
+                                                                                                                                        "type": "long"
+                                                                                                                                    }
+                                                                                                                                ],
+                                                                                                                                "type": "struct"
+                                                                                                                            },
+                                                                                                                            "type": "array"
+                                                                                                                        }
+                                                                                                                    },
+                                                                                                                    {
+                                                                                                                        "metadata": {},
+                                                                                                                        "name": "information-set",
+                                                                                                                        "nullable": true,
+                                                                                                                        "type": "long"
+                                                                                                                    },
+                                                                                                                    {
+                                                                                                                        "metadata": {},
+                                                                                                                        "name": "kind",
+                                                                                                                        "nullable": true,
+                                                                                                                        "type": "string"
+                                                                                                                    },
+                                                                                                                    {
+                                                                                                                        "metadata": {},
+                                                                                                                        "name": "payoffs",
+                                                                                                                        "nullable": true,
+                                                                                                                        "type": {
+                                                                                                                            "containsNull": true,
+                                                                                                                            "elementType": "long",
+                                                                                                                            "type": "array"
+                                                                                                                        }
+                                                                                                                    },
+                                                                                                                    {
+                                                                                                                        "metadata": {},
+                                                                                                                        "name": "player",
+                                                                                                                        "nullable": true,
+                                                                                                                        "type": "long"
+                                                                                                                    }
+                                                                                                                ],
+                                                                                                                "type": "struct"
+                                                                                                            },
+                                                                                                            "type": "array"
+                                                                                                        }
+                                                                                                    },
+                                                                                                    {
+                                                                                                        "metadata": {},
+                                                                                                        "name": "information-set",
+                                                                                                        "nullable": true,
+                                                                                                        "type": "long"
+                                                                                                    },
+                                                                                                    {
+                                                                                                        "metadata": {},
+                                                                                                        "name": "kind",
+                                                                                                        "nullable": true,
+                                                                                                        "type": "string"
+                                                                                                    },
+                                                                                                    {
+                                                                                                        "metadata": {},
+                                                                                                        "name": "payoffs",
+                                                                                                        "nullable": true,
+                                                                                                        "type": {
+                                                                                                            "containsNull": true,
+                                                                                                            "elementType": "long",
+                                                                                                            "type": "array"
+                                                                                                        }
+                                                                                                    },
+                                                                                                    {
+                                                                                                        "metadata": {},
+                                                                                                        "name": "player",
+                                                                                                        "nullable": true,
+                                                                                                        "type": "long"
+                                                                                                    }
+                                                                                                ],
+                                                                                                "type": "struct"
+                                                                                            },
+                                                                                            "type": "array"
+                                                                                        }
+                                                                                    },
+                                                                                    {
+                                                                                        "metadata": {},
+                                                                                        "name": "information-set",
+                                                                                        "nullable": true,
+                                                                                        "type": "long"
+                                                                                    },
+                                                                                    {
+                                                                                        "metadata": {},
+                                                                                        "name": "kind",
+                                                                                        "nullable": true,
+                                                                                        "type": "string"
+                                                                                    },
+                                                                                    {
+                                                                                        "metadata": {},
+                                                                                        "name": "payoffs",
+                                                                                        "nullable": true,
+                                                                                        "type": {
+                                                                                            "containsNull": true,
+                                                                                            "elementType": "long",
+                                                                                            "type": "array"
+                                                                                        }
+                                                                                    },
+                                                                                    {
+                                                                                        "metadata": {},
+                                                                                        "name": "player",
+                                                                                        "nullable": true,
+                                                                                        "type": "long"
+                                                                                    }
+                                                                                ],
+                                                                                "type": "struct"
+                                                                            },
+                                                                            "type": "array"
+                                                                        }
+                                                                    },
+                                                                    {
+                                                                        "metadata": {},
+                                                                        "name": "information-set",
+                                                                        "nullable": true,
+                                                                        "type": "long"
+                                                                    },
+                                                                    {
+                                                                        "metadata": {},
+                                                                        "name": "kind",
+                                                                        "nullable": true,
+                                                                        "type": "string"
+                                                                    },
+                                                                    {
+                                                                        "metadata": {},
+                                                                        "name": "payoffs",
+                                                                        "nullable": true,
+                                                                        "type": {
+                                                                            "containsNull": true,
+                                                                            "elementType": "long",
+                                                                            "type": "array"
+                                                                        }
+                                                                    },
+                                                                    {
+                                                                        "metadata": {},
+                                                                        "name": "player",
+                                                                        "nullable": true,
+                                                                        "type": "long"
+                                                                    }
+                                                                ],
+                                                                "type": "struct"
+                                                            },
+                                                            "type": "array"
+                                                        }
+                                                    },
+                                                    {
+                                                        "metadata": {},
+                                                        "name": "information-set",
+                                                        "nullable": true,
+                                                        "type": "long"
+                                                    },
+                                                    {
+                                                        "metadata": {},
+                                                        "name": "kind",
+                                                        "nullable": true,
+                                                        "type": "string"
+                                                    },
+                                                    {
+                                                        "metadata": {},
+                                                        "name": "payoffs",
+                                                        "nullable": true,
+                                                        "type": {
+                                                            "containsNull": true,
+                                                            "elementType": "long",
+                                                            "type": "array"
+                                                        }
+                                                    },
+                                                    {
+                                                        "metadata": {},
+                                                        "name": "player",
+                                                        "nullable": true,
+                                                        "type": "long"
+                                                    }
+                                                ],
+                                                "type": "struct"
+                                            },
+                                            "type": "array"
+                                        }
+                                    },
+                                    {
+                                        "metadata": {},
+                                        "name": "information-set",
+                                        "nullable": true,
+                                        "type": "long"
+                                    },
+                                    {
+                                        "metadata": {},
+                                        "name": "kind",
+                                        "nullable": true,
+                                        "type": "string"
+                                    },
+                                    {
+                                        "metadata": {},
+                                        "name": "player",
+                                        "nullable": true,
+                                        "type": "long"
+                                    }
+                                ],
+                                "type": "struct"
+                            },
+                            "type": "array"
+                        }
+                    },
+                    {
+                        "metadata": {},
+                        "name": "information-set",
+                        "nullable": true,
+                        "type": "long"
+                    },
+                    {
+                        "metadata": {},
+                        "name": "kind",
+                        "nullable": true,
+                        "type": "string"
+                    },
+                    {
+                        "metadata": {},
+                        "name": "player",
+                        "nullable": true,
+                        "type": "long"
+                    }
+                ],
+                "type": "struct"
+            }
+        },
+        {
+            "metadata": {},
+            "name": "stg",
+            "nullable": true,
+            "type": {
+                "fields": [
+                    {
+                        "metadata": {},
+                        "name": "as",
+                        "nullable": true,
+                        "type": {
+                            "containsNull": true,
+                            "elementType": "string",
+                            "type": "array"
+                        }
+                    },
+                    {
+                        "metadata": {},
+                        "name": "is",
+                        "nullable": true,
+                        "type": {
+                            "containsNull": true,
+                            "elementType": {
+                                "fields": [
+                                    {
+                                        "metadata": {},
+                                        "name": "a",
+                                        "nullable": true,
+                                        "type": {
+                                            "containsNull": true,
+                                            "elementType": "string",
+                                            "type": "array"
+                                        }
+                                    },
+                                    {
+                                        "metadata": {},
+                                        "name": "i",
+                                        "nullable": true,
+                                        "type": "string"
+                                    },
+                                    {
+                                        "metadata": {},
+                                        "name": "ns",
+                                        "nullable": true,
+                                        "type": {
+                                            "containsNull": true,
+                                            "elementType": {
+                                                "fields": [
+                                                    {
+                                                        "metadata": {},
+                                                        "name": "n",
+                                                        "nullable": true,
+                                                        "type": "string"
+                                                    },
+                                                    {
+                                                        "metadata": {},
+                                                        "name": "ps",
+                                                        "nullable": true,
+                                                        "type": {
+                                                            "containsNull": true,
+                                                            "elementType": {
+                                                                "fields": [
+                                                                    {
+                                                                        "metadata": {},
+                                                                        "name": "a",
+                                                                        "nullable": true,
+                                                                        "type": "string"
+                                                                    },
+                                                                    {
+                                                                        "metadata": {},
+                                                                        "name": "p",
+                                                                        "nullable": true,
+                                                                        "type": "string"
+                                                                    }
+                                                                ],
+                                                                "type": "struct"
+                                                            },
+                                                            "type": "array"
+                                                        }
+                                                    }
+                                                ],
+                                                "type": "struct"
+                                            },
+                                            "type": "array"
+                                        }
+                                    },
+                                    {
+                                        "metadata": {},
+                                        "name": "p",
+                                        "nullable": true,
+                                        "type": "string"
+                                    }
+                                ],
+                                "type": "struct"
+                            },
+                            "type": "array"
+                        }
+                    },
+                    {
+                        "metadata": {},
+                        "name": "ps",
+                        "nullable": true,
+                        "type": {
+                            "containsNull": true,
+                            "elementType": "string",
+                            "type": "array"
+                        }
+                    },
+                    {
+                        "metadata": {},
+                        "name": "rs",
+                        "nullable": true,
+                        "type": {
+                            "containsNull": true,
+                            "elementType": {
+                                "fields": [
+                                    {
+                                        "metadata": {},
+                                        "name": "p",
+                                        "nullable": true,
+                                        "type": "string"
+                                    },
+                                    {
+                                        "metadata": {},
+                                        "name": "s",
+                                        "nullable": true,
+                                        "type": {
+                                            "containsNull": true,
+                                            "elementType": {
+                                                "containsNull": true,
+                                                "elementType": {
+                                                    "fields": [
+                                                        {
+                                                            "metadata": {},
+                                                            "name": "a",
+                                                            "nullable": true,
+                                                            "type": "string"
+                                                        },
+                                                        {
+                                                            "metadata": {},
+                                                            "name": "i",
+                                                            "nullable": true,
+                                                            "type": "string"
+                                                        }
+                                                    ],
+                                                    "type": "struct"
+                                                },
+                                                "type": "array"
+                                            },
+                                            "type": "array"
+                                        }
+                                    }
+                                ],
+                                "type": "struct"
+                            },
+                            "type": "array"
+                        }
+                    },
+                    {
+                        "metadata": {},
+                        "name": "z",
+                        "nullable": true,
+                        "type": {
+                            "containsNull": true,
+                            "elementType": {
+                                "fields": [
+                                    {
+                                        "metadata": {},
+                                        "name": "h",
+                                        "nullable": true,
+                                        "type": {
+                                            "containsNull": true,
+                                            "elementType": {
+                                                "fields": [
+                                                    {
+                                                        "metadata": {},
+                                                        "name": "a",
+                                                        "nullable": true,
+                                                        "type": "string"
+                                                    },
+                                                    {
+                                                        "metadata": {},
+                                                        "name": "i",
+                                                        "nullable": true,
+                                                        "type": "string"
+                                                    }
+                                                ],
+                                                "type": "struct"
+                                            },
+                                            "type": "array"
+                                        }
+                                    },
+                                    {
+                                        "metadata": {},
+                                        "name": "s",
+                                        "nullable": true,
+                                        "type": {
+                                            "containsNull": true,
+                                            "elementType": "string",
+                                            "type": "array"
+                                        }
+                                    },
+                                    {
+                                        "metadata": {},
+                                        "name": "u",
+                                        "nullable": true,
+                                        "type": {
+                                            "containsNull": true,
+                                            "elementType": {
+                                                "fields": [
+                                                    {
+                                                        "metadata": {},
+                                                        "name": "p",
+                                                        "nullable": true,
+                                                        "type": "string"
+                                                    },
+                                                    {
+                                                        "metadata": {},
+                                                        "name": "v",
+                                                        "nullable": true,
+                                                        "type": "long"
+                                                    }
+                                                ],
+                                                "type": "struct"
+                                            },
+                                            "type": "array"
+                                        }
+                                    },
+                                    {
+                                        "metadata": {},
+                                        "name": "z",
+                                        "nullable": true,
+                                        "type": "string"
+                                    }
+                                ],
+                                "type": "struct"
+                            },
+                            "type": "array"
+                        }
+                    }
+                ],
+                "type": "struct"
+            }
+        }
+    ],
+    "type": "struct"
+}
