@@ -11,6 +11,7 @@ import matplotlib
 matplotlib.use("Agg")
 
 import matplotlib.pyplot as plt
+import numpy as np
 import pandas as pd
 import pytest
 from pyspark.sql import SparkSession, functions as F
@@ -145,6 +146,7 @@ def _write_histogram(series, out_path, title, xlabel):
         return
 
     bins = int(series.max() - series.min())
+    bins = max(bins, 1)
     plt.figure(figsize=(10, 6))
     plt.hist(series.to_numpy(), bins=bins, edgecolor="black", linewidth=0.8)
     plt.grid(True, axis="y", alpha=0.3, linestyle="--")
@@ -164,6 +166,7 @@ def _write_histogram_2d(x_values, y_values, out_path, title, xlabel, ylabel):
         return
 
     bins = (frame.max(axis=0) - frame.min(axis=0)).to_numpy().astype(int)
+    bins = np.maximum(bins, [1, 1])
     plt.figure(figsize=(10, 6))
     plt.hist2d(frame[xlabel].to_numpy(), frame[ylabel].to_numpy(), bins=bins)
     plt.colorbar(label="count")
