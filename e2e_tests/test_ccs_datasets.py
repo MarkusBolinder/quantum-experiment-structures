@@ -173,6 +173,9 @@ def _dataset_leaf_dirs(root):
     candidates = []
     for dirpath, _, filenames in os.walk(root):
         path = Path(dirpath)
+        parts = path.parts
+        if any(part.startswith(".") for part in parts) or "covers" in parts:
+            continue
         if any(
             Path(name).suffix in DATA_EXTENSIONS and not name.startswith("_") for name in filenames
         ):
